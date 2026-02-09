@@ -1,7 +1,21 @@
 // Enhanced Linux stub for claude-native module
 // Key difference from existing solutions: Uses Electron APIs instead of no-ops
-const { BrowserWindow, Notification, app } = require('electron');
+const { BrowserWindow, Notification, app, nativeImage } = require('electron');
 const os = require('os');
+
+// Set Claude icon on every BrowserWindow so the dock shows the correct icon
+if (process.platform === 'linux') {
+  app.on('browser-window-created', (event, window) => {
+    try {
+      const iconPath = require('path').join(
+        require('path').dirname(app.getAppPath()),
+        'resources', 'icon.png'
+      );
+      const icon = nativeImage.createFromPath(iconPath);
+      if (!icon.isEmpty()) window.setIcon(icon);
+    } catch (e) {}
+  });
+}
 
 class ClaudeNativeLinux {
   constructor() {

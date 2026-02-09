@@ -48,6 +48,8 @@ nix develop
 | 04 | skip-download | `TCe(t,e)` | Skip macOS VM bundle download |
 | 05 | vm-start-intercept | `ppt(t,e,r,n)` | Create bubblewrap session, dispatch Ready |
 | 06 | vm-getter | `Ai()` + `fwe()` | Return Linux VM instance |
+| 07 | platform-branding | mainView.js preload | Replace "for Windows"/"for Mac" with "for Linux" |
+| 08 | tray-icon-linux | tray icon ternary | Use theme-aware PNGs instead of Windows ICOs |
 
 ## Electron Gotchas
 

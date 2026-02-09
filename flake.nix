@@ -100,13 +100,33 @@
               done
               echo "  Copied $(ls extracted/resources/i18n/*.json 2>/dev/null | wc -l) i18n files"
 
-              # Copy tray icons
-              mkdir -p extracted/resources/icons
+              # Copy tray icons directly into resources/ (not resources/icons/)
+              # The app resolves icon paths via path.resolve(__dirname, "../..", "resources")
+              echo "  Copying tray icons..."
               for icon in "$RESOURCES_DIR"/TrayIcon*.png "$RESOURCES_DIR"/Tray-Win32*.ico "$RESOURCES_DIR"/EchoTray*.png; do
                 if [ -f "$icon" ]; then
-                  cp "$icon" extracted/resources/icons/
+                  cp "$icon" extracted/resources/
                 fi
               done
+              echo "  Copied $(ls extracted/resources/TrayIcon* extracted/resources/EchoTray* extracted/resources/Tray-Win32* 2>/dev/null | wc -l) tray icons"
+
+              # Extract app icon from ICNS for notification icon and desktop entry
+              echo "  Extracting app icons from ICNS..."
+              ICNS_FILE="$RESOURCES_DIR/electron.icns"
+              if [ -f "$ICNS_FILE" ]; then
+                mkdir -p icon-extracted
+                ${pkgs.python3}/bin/python3 ${./tools/icns_extract.py} "$ICNS_FILE" icon-extracted
+                # Place 256px icon in ASAR resources as icon.png (used for notifications)
+                if [ -f icon-extracted/256.png ]; then
+                  cp icon-extracted/256.png extracted/resources/icon.png
+                  echo "  Installed icon.png (256x256) for notifications"
+                elif [ -f icon-extracted/512.png ]; then
+                  cp icon-extracted/512.png extracted/resources/icon.png
+                  echo "  Installed icon.png (512x512) for notifications"
+                fi
+              else
+                echo "  WARNING: electron.icns not found, skipping app icon extraction"
+              fi
 
               # Apply patches
               echo "[5/6] Applying patches..."
@@ -133,6 +153,9 @@
               # Branding: Replace "for Windows"/"for Mac" with "for Linux" in UI
               ${pkgs.nodejs}/bin/node ${./scripts/patches-2321/07-platform-branding.js} extracted
 
+              # Tray: Use theme-aware PNGs on Linux instead of Windows ICOs
+              ${pkgs.nodejs}/bin/node ${./scripts/patches-2321/08-tray-icon-linux.js} extracted
+
               # Clean up backup files before repacking
               find extracted -name "*.backup" -o -name "*-backup" | xargs rm -f 2>/dev/null || true
 
@@ -157,6 +180,28 @@
                   $out/lib/claude-desktop/app.asar.unpacked
               fi
 
+              # Copy tray icons and app icon to real filesystem (alongside ASAR)
+              # COSMIC's SNI can't read from inside ASAR archives, so these must
+              # be on the real filesystem for the tray icon to display correctly.
+              mkdir -p $out/lib/claude-desktop/resources
+              for icon in extracted/resources/TrayIconTemplate*.png extracted/resources/icon.png; do
+                if [ -f "$icon" ]; then
+                  cp "$icon" $out/lib/claude-desktop/resources/
+                fi
+              done
+
+              # Install hicolor theme icons for desktop entry
+              if [ -d icon-extracted ]; then
+                for png in icon-extracted/*.png; do
+                  size=$(basename "$png" .png)
+                  if [ "$size" -gt 0 ] 2>/dev/null; then
+                    mkdir -p "$out/share/icons/hicolor/''${size}x''${size}/apps"
+                    cp "$png" "$out/share/icons/hicolor/''${size}x''${size}/apps/claude.png"
+                    echo "  Installed ''${size}x''${size} icon"
+                  fi
+                done
+              fi
+
               runHook postInstall
             '';
           };
@@ -172,8 +217,11 @@
                 --add-flags "$out/lib/claude-desktop/app.asar" \
                 --add-flags "--no-sandbox" \
                 --add-flags "--ozone-platform-hint=auto" \
+                --add-flags "--class=Claude" \
                 --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.bubblewrap ]} \
-                --set BWRAP_PATH "${pkgs.bubblewrap}/bin/bwrap"
+                --set BWRAP_PATH "${pkgs.bubblewrap}/bin/bwrap" \
+                --set CHROME_DESKTOP "claude-desktop.desktop" \
+                --prefix XDG_DATA_DIRS : "$out/share"
 
               # Desktop entry
               mkdir -p $out/share/applications
