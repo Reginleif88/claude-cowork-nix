@@ -4,7 +4,7 @@ Enabling macOS-only Claude Desktop features on Linux via runtime patching.
 
 ## Architecture
 
-- **Source**: macOS DMG fetched via `fetchurl` (v1.1.2512)
+- **Source**: macOS DMG fetched via `fetchurl` (v1.1.2685)
 - **Extraction**: `dmg2img` + `7z` + `asar_tool.py`
 - **Runtime**: `electron_37` from nixpkgs
 - **Packaging**: Nix flake with `makeWrapper` + `buildFHSEnv`
@@ -34,10 +34,10 @@ nix develop
 2. **Update hash**: `nix-prefetch-url <url>` then convert to SRI
 3. **Extract index.js**: Build with `-L` to see extraction, or use dev shell
 4. **Find patterns**: `grep -oP '.{0,50}PATTERN.{0,50}' index.js`
-5. **Update patches**: Edit `scripts/patches-2512/*.js`
+5. **Update patches**: Edit `scripts/patches-2685/*.js`
 6. **Test**: `nix build . && nix run .`
 
-## Patch Chain (v1.1.2512)
+## Patch Chain (v1.1.2685)
 
 | # | File | Target | Purpose |
 |---|------|--------|---------|

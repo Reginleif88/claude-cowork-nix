@@ -1,6 +1,6 @@
 # Cowork on Linux - Progress Report
 
-## Current Status: v1.1.2321 NixOS Package
+## Current Status: v1.1.2685 NixOS Package
 
 Cowork (macOS-only sandboxed directory access) is being enabled on Linux using bubblewrap namespace sandboxing, packaged as a fully declarative Nix flake.
 
@@ -106,5 +106,5 @@ nix run .#claude-desktop-fhs
 ---
 
 **Last Updated**: 2026-02-08
-**Claude Desktop Version**: 1.1.2321
+**Claude Desktop Version**: 1.1.2685
 **Status**: Build pipeline complete, Cowork runtime testing needed

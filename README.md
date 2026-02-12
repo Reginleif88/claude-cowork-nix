@@ -3,7 +3,7 @@
 [![Nix Flake](https://img.shields.io/badge/Nix-Flake-5277C3?logo=nixos&logoColor=white)](https://github.com/heytcass/claude-for-linux)
 [![Platform](https://img.shields.io/badge/Platform-Linux-blue?logo=linux&logoColor=white)](https://github.com/heytcass/claude-for-linux)
 [![License](https://img.shields.io/badge/License-Personal%20Use-orange)](./LICENSE)
-[![Claude Desktop](https://img.shields.io/badge/Claude%20Desktop-v1.1.2321-purple)](https://claude.ai)
+[![Claude Desktop](https://img.shields.io/badge/Claude%20Desktop-v1.1.2685-purple)](https://claude.ai)
 [![Cowork](https://img.shields.io/badge/Cowork-Enabled-green)](./COWORK_PROGRESS.md)
 
 Fully declarative NixOS package for Claude Desktop on Linux with Cowork support. Extracts from the macOS DMG, patches for Linux compatibility, and wraps with Electron 37.
@@ -104,7 +104,7 @@ macOS DMG (fetchurl)
 │   ├── claude-cowork-linux.js        # Bubblewrap session manager
 │   └── enhanced-claude-native-stub.js # Linux native module replacement
 ├── scripts/
-│   ├── patches-2321/                 # Patches for v1.1.2321
+│   ├── patches-2685/                 # Patches for v1.1.2685
 │   │   ├── 00-native-module-stub.js
 │   │   ├── 01-cowork-module-loader.js
 │   │   ├── 02-platform-flag.js

@@ -4,7 +4,7 @@
 [![NixOS](https://img.shields.io/badge/NixOS-Module-blue?logo=nixos&logoColor=white)](./examples/nixos-configuration.nix)
 [![Home Manager](https://img.shields.io/badge/Home%20Manager-Module-green?logo=nixos&logoColor=white)](./examples/home-manager.nix)
 
-Fully declarative Nix flake that builds Claude Desktop v1.1.2321 for Linux from the macOS DMG, applies runtime patches, and wraps with `electron_37` from nixpkgs.
+Fully declarative Nix flake that builds Claude Desktop v1.1.2685 for Linux from the macOS DMG, applies runtime patches, and wraps with `electron_37` from nixpkgs.
 
 ## Quick Start
 
