@@ -140,21 +140,21 @@
               cp source-modules/*.js source-root/modules/
 
               # Base: Install native module stub
-              ${pkgs.nodejs}/bin/node ${./scripts/patches-2685/00-native-module-stub.js} extracted source-root
+              ${pkgs.nodejs}/bin/node ${./scripts/patches-2998/00-native-module-stub.js} extracted source-root
 
               # Cowork: Install module and apply patches (in order)
-              ${pkgs.nodejs}/bin/node ${./scripts/patches-2685/01-cowork-module-loader.js} extracted source-root
-              ${pkgs.nodejs}/bin/node ${./scripts/patches-2685/02-platform-flag.js} extracted
-              ${pkgs.nodejs}/bin/node ${./scripts/patches-2685/03-availability-check.js} extracted
-              ${pkgs.nodejs}/bin/node ${./scripts/patches-2685/04-skip-download.js} extracted
-              ${pkgs.nodejs}/bin/node ${./scripts/patches-2685/05-vm-start-intercept.js} extracted
-              ${pkgs.nodejs}/bin/node ${./scripts/patches-2685/06-vm-getter.js} extracted
+              ${pkgs.nodejs}/bin/node ${./scripts/patches-2998/01-cowork-module-loader.js} extracted source-root
+              ${pkgs.nodejs}/bin/node ${./scripts/patches-2998/02-platform-flag.js} extracted
+              ${pkgs.nodejs}/bin/node ${./scripts/patches-2998/03-availability-check.js} extracted
+              ${pkgs.nodejs}/bin/node ${./scripts/patches-2998/04-skip-download.js} extracted
+              ${pkgs.nodejs}/bin/node ${./scripts/patches-2998/05-vm-start-intercept.js} extracted
+              ${pkgs.nodejs}/bin/node ${./scripts/patches-2998/06-vm-getter.js} extracted
 
               # Branding: Replace "for Windows"/"for Mac" with "for Linux" in UI
-              ${pkgs.nodejs}/bin/node ${./scripts/patches-2685/07-platform-branding.js} extracted
+              ${pkgs.nodejs}/bin/node ${./scripts/patches-2998/07-platform-branding.js} extracted
 
               # Tray: Use theme-aware PNGs on Linux instead of Windows ICOs
-              ${pkgs.nodejs}/bin/node ${./scripts/patches-2685/08-tray-icon-linux.js} extracted
+              ${pkgs.nodejs}/bin/node ${./scripts/patches-2998/08-tray-icon-linux.js} extracted
 
               # Clean up backup files before repacking
               find extracted -name "*.backup" -o -name "*-backup" | xargs rm -f 2>/dev/null || true
