@@ -59,6 +59,8 @@ const injection = `async function ${funcName}(${params.join(',')}){
       manager.createSession(sessionId);
       console.log("[Cowork Linux] Session created:",sessionId);
       const _procs=new Map();
+      const _sessionBase=require("path").join("/tmp/claude-cowork-sessions",sessionId);
+      const _resolvePath=(p)=>{if(typeof p==="string"&&p.startsWith("/sessions/")){const parts=p.split("/");const name=parts[2];return require("path").join(_sessionBase,"sessions",name,...parts.slice(3))}return p};
       const vmInstance={
         sessionId,
         isConnected:()=>true,
@@ -117,13 +119,13 @@ const injection = `async function ${funcName}(${params.join(',')}){
           child.on("error",(e)=>{console.error("[Cowork Linux] spawn error id="+id+":",e.message);if(cbs.onError)cbs.onError(id,e.message,true)});
         },
         exec:(command)=>manager.spawnSandboxed(sessionId,'/bin/sh',['-c',command]),
-        mkdir:()=>Promise.resolve(),
-        readFile:(p,enc)=>Promise.resolve(require('fs').readFileSync(p,enc||'utf8')),
-        writeFile:(p,data,enc)=>{require('fs').writeFileSync(p,data,enc||'utf8');return Promise.resolve()},
-        rm:()=>Promise.resolve(),
+        mkdir:(p)=>{require("fs").mkdirSync(_resolvePath(p),{recursive:true});return Promise.resolve()},
+        readFile:(p,enc)=>Promise.resolve(require('fs').readFileSync(_resolvePath(p),enc||'utf8')),
+        writeFile:(p,data,enc)=>{require('fs').writeFileSync(_resolvePath(p),data,enc||'utf8');return Promise.resolve()},
+        rm:(p)=>{try{require("fs").rmSync(_resolvePath(p),{recursive:true,force:true})}catch(e){};return Promise.resolve()},
         configure:async()=>{},
         createVM:async()=>{},
-        mountPath:async()=>{},
+        mountPath:async(processId,subpath,mountName,mode)=>{const _fs=require("fs"),_path=require("path");const mntDir=_path.join(_sessionBase,subpath,mountName);_fs.mkdirSync(mntDir,{recursive:true});console.log("[Cowork Linux] mountPath:",mountName,"->",mntDir,"mode:",mode)},
         getVmProcessId:()=>'cowork-linux-'+sessionId.slice(0,8),
         connect:async()=>{},
         disconnect:async()=>{_procs.forEach((p)=>{try{p.kill()}catch(e){}});_procs.clear();manager.destroySession(sessionId)},
