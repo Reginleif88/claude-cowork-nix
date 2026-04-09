@@ -4,14 +4,14 @@ This document describes the patching approach in `claude-cowork-nix` and documen
 
 ## Current State
 
-**Option B (hybrid approach) has been implemented:**
+**Option B (hybrid approach) has been implemented and proven across multiple versions:**
 
-- 5 simple patches (02, 03, 04, 06, 08) converted to `perl -pe` regex with `\w+` wildcards
+- 7 patches (02, 03, 04, 06a, 06b, 08a, 08b, 09) use `perl -pe` regex with `\w+` wildcards
 - VM start (patch 05) uses dynamic Node.js discovery via `scripts/patch-vm-start.js`
 - Each regex patch verified with `grep -qP` post-check
-- Old `scripts/patches-XXXX/` directories removed
+- DMG extraction uses `7zz` (7-Zip v26+) for native LZFSE support (newer DMGs require this)
 - Standalone IIFEs extracted to `scripts/cowork-init.js` and `scripts/branding-fix.js`
-- New patch 09 added: DBus tray cleanup delay (from claude-desktop-linux-flake)
+- Tested across v1.1.2685, v1.1.3770, and v1.1348.0 (major versioning scheme change)
 
 ## The Problem
 
@@ -126,7 +126,7 @@ grep -oP 'function \w+\(\)\{return \w+\.app\.isPackaged\?\w+\.resourcesPath:\w+\
 grep -oP '\w+\?\w+=\w+\.nativeTheme\.shouldUseDarkColors\?"Tray-Win32-Dark\.ico":"Tray-Win32\.ico":\w+="TrayIconTemplate\.png"' $INDEX
 ```
 
-These patterns have been stable across v2685, v2998, and v3189.
+These patterns have been stable across v2685, v2998, v3189, v3770, and v1.1348.0 (new versioning scheme).
 
 ## Toward Automated Patching
 

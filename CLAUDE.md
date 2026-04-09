@@ -4,8 +4,8 @@ Enabling macOS-only Claude Desktop features on Linux via runtime patching.
 
 ## Architecture
 
-- **Source**: macOS DMG fetched via `fetchurl` (v1.1.3770)
-- **Extraction**: `dmg2img` + `7z` + `asar_tool.py`
+- **Source**: macOS DMG fetched via `fetchurl` (v1.1348.0)
+- **Extraction**: `7zz` (native LZFSE support) + `asar_tool.py`
 - **Runtime**: `electron_41` from nixpkgs
 - **Packaging**: Nix flake with `makeWrapper` + `buildFHSEnv`
 
@@ -32,8 +32,8 @@ nix develop
 
 Patches use `perl -pe` regex with `\w+` (or `[\w\$]+` where minified names contain `$`) wildcards for minified identifiers, so version bumps should not require patch changes.
 
-1. **Fetch DMG URL**: `curl -sI https://claude.ai/api/desktop/darwin/universal/dmg/latest/redirect | grep location`
-2. **Update hash**: `nix-prefetch-url <url>` then convert to SRI
+1. **Fetch DMG URL**: Get from `https://claude.ai/download` (inspect download link in browser)
+2. **Update hash**: `nix-prefetch-url <url>` then `nix hash convert --hash-algo sha256 --to sri <hash>`
 3. **Update version/hash/URL** in `flake.nix`
 4. **Build**: `nix build .` — if it succeeds, patches are still valid
 5. **If build fails**: Check the `grep -qP` verification errors to see which regex needs updating

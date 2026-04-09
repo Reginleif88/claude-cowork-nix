@@ -9,9 +9,9 @@
   outputs = { self, nixpkgs, flake-utils }:
     let
       # Claude Desktop version and source
-      claudeVersion = "1.1.3770";
-      claudeDmgHash = "sha256-dx+lYjSYN1vRMKGQdNYFJwxZAwfyoLjxlJUKd29c6+Y=";
-      claudeDmgUrl = "https://downloads.claude.ai/releases/darwin/universal/${claudeVersion}/Claude-f7f5859a17386e383fad75f35ff6dd0f6e9dfd66.dmg";
+      claudeVersion = "1.1348.0";
+      claudeDmgHash = "sha256-YoL06TlvPfoogNWcOLk98U+kKreNkq0PvosgqQej/lY=";
+      claudeDmgUrl = "https://downloads.claude.ai/releases/darwin/universal/${claudeVersion}/Claude-efa3fd592db60fbce44a6c3bc4b85e018d17be31.dmg";
 
       supportedSystems = [ "x86_64-linux" "aarch64-linux" ];
 
@@ -45,8 +45,7 @@
             src = claudeSrc;
 
             nativeBuildInputs = with pkgs; [
-              dmg2img
-              p7zip
+              _7zz
               python3
               nodejs
               perl
@@ -59,17 +58,13 @@
 
               echo "=== Extracting Claude Desktop ${claudeVersion} ==="
 
-              # Convert DMG to IMG
-              echo "[1/6] Converting DMG to IMG..."
-              dmg2img $src claude.img
-
-              # Extract with 7z
-              echo "[2/6] Extracting IMG..."
+              # Extract directly from DMG using 7zz (supports LZFSE natively)
+              echo "[1/6] Extracting DMG..."
               mkdir -p dmg-contents
-              7z x -y -odmg-contents claude.img > /dev/null 2>&1 || true
+              7zz x -y -odmg-contents $src > /dev/null 2>&1
 
               # Find app.asar
-              echo "[3/6] Locating app.asar..."
+              echo "[2/6] Locating app.asar..."
               APP_ASAR=$(find dmg-contents -name "app.asar" -path "*/Contents/Resources/*" | head -1)
               if [ -z "$APP_ASAR" ]; then
                 echo "ERROR: app.asar not found in DMG"
@@ -86,7 +81,7 @@
               echo "  Resources dir: $RESOURCES_DIR"
 
               # Extract ASAR
-              echo "[4/6] Extracting ASAR..."
+              echo "[3/6] Extracting ASAR..."
               mkdir -p extracted
               ${asarTool}/bin/asar-tool extract "$APP_ASAR" extracted
 
@@ -130,7 +125,7 @@
               fi
 
               # Apply patches (version-resilient regex + dynamic discovery)
-              echo "[5/6] Applying patches..."
+              echo "[4/6] Applying patches..."
 
               INDEX="extracted/.vite/build/index.js"
               MAINVIEW="extracted/.vite/build/mainView.js"
@@ -224,11 +219,11 @@
               # --- Patch 09: DBus tray cleanup delay (regex) ---
               # Prevents StatusNotifierItem registration race on Linux
               echo "[patch:09] Patching tray DBus cleanup delay..."
-              perl -i -pe 's{(\w+)&&\(\1\.destroy\(\),\1=null\)}{$1&&($1.destroy(),$1=null,await new Promise(r=>setTimeout(r,250)))}g' "$INDEX"
+              perl -i -pe 's{(\w+)&&\(\1\.destroy\(\),\1=null\)}{$1&&($1.destroy(),$1=null,setTimeout(()=>{},250))}g' "$INDEX"
               echo "[patch:09] Done"
 
               # Repack ASAR
-              echo "[6/6] Repacking ASAR..."
+              echo "[5/6] Repacking ASAR..."
               ${asarTool}/bin/asar-tool pack extracted app.asar
 
               echo "=== Build complete ==="
@@ -285,6 +280,7 @@
                 --add-flags "$out/lib/claude-desktop/app.asar" \
                 --add-flags "--no-sandbox" \
                 --add-flags "--ozone-platform-hint=auto" \
+                --add-flags "--password-store=gnome-libsecret" \
                 --add-flags "--class=Claude" \
                 --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.bubblewrap ]} \
                 --set BWRAP_PATH "${pkgs.bubblewrap}/bin/bwrap" \

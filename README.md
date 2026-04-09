@@ -6,7 +6,7 @@
 [![Claude Desktop](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2FReginleif88%2Fclaude-cowork-nix%2Fmain%2Fflake.nix&search=claudeVersion%20%3D%20%22(%5B%5E%22%5D%2B)%22&replace=v$1&label=Claude%20Desktop&color=d97757)](https://claude.ai)
 [![Cowork](https://img.shields.io/badge/Cowork-Enabled-green)](./COWORK_PROGRESS.md)
 
-Fully declarative NixOS package for Claude Desktop on Linux with Cowork support. Extracts from the macOS DMG, patches for Linux compatibility, and wraps with Electron 41.
+Fully declarative NixOS package for Claude Desktop on Linux with Cowork support. Extracts from the macOS DMG (with native LZFSE support), patches for Linux compatibility, and wraps with Electron 41.
 
 > Originally created by [Tom Cassady (@heytcass)](https://github.com/heytcass).
 > Based on [claude-desktop-linux-flake](https://github.com/heytcass/claude-desktop-linux-flake).
@@ -92,6 +92,7 @@ The **direct variant** runs electron directly with `makeWrapper`. It sets `BWRAP
 
 - **Sign-in** via Google OAuth / SSO (opens system browser, returns via deep link)
 - **Native Wayland** support (not XWayland) via `--ozone-platform-hint=auto`
+- **Persistent auth tokens** via `--password-store=gnome-libsecret` (works with KDE Wallet, GNOME Keyring, or any `org.freedesktop.secrets` provider)
 - **HiDPI scaling** (sharp rendering)
 - **Window decorations** with titlebar overlay
 - **Claude Code** tool execution
@@ -104,7 +105,7 @@ The **direct variant** runs electron directly with `makeWrapper`. It sets `BWRAP
 ```
 macOS DMG (fetchurl)
        |
-  dmg2img + 7z -> app.asar
+  7zz (LZFSE) -> app.asar
        |
   asar_tool.py extract -> raw JS
        |
@@ -137,15 +138,6 @@ Claude Desktop has two VM paths: macOS via `@ant/claude-swift` (Swift native mod
 │   ├── claude-cowork-linux.js        # Bubblewrap session manager
 │   └── enhanced-claude-native-stub.js # Linux native module replacement
 ├── scripts/
-│   ├── patches-2685/                 # Patches for v1.1.2685
-│   │   ├── 00-native-module-stub.js
-│   │   ├── 01-cowork-module-loader.js
-│   │   ├── 02-platform-flag.js
-│   │   ├── 03-availability-check.js
-│   │   ├── 04-skip-download.js
-│   │   ├── 05-vm-start-intercept.js
-│   │   ├── 06-vm-getter.js
-│   │   └── 07-platform-branding.js
 │   ├── branding-fix.js               # Platform branding patch
 │   ├── cowork-init.js                # Cowork initialization
 │   ├── patch-vm-start.js             # VM start intercept
@@ -174,8 +166,8 @@ nix run . 2>&1 | grep -E "Cowork|error"
 
 Patches use `perl -pe` regex with `\w+` wildcards for minified identifiers, so version bumps should not require patch changes.
 
-1. Get the new DMG URL: `curl -sI https://claude.ai/api/desktop/darwin/universal/dmg/latest/redirect | grep location`
-2. Update `claudeVersion` and `claudeDmgHash` in `flake.nix`
+1. Get the new DMG URL from `https://claude.ai/download` (inspect the download link in browser dev tools)
+2. Update `claudeVersion`, `claudeDmgUrl`, and `claudeDmgHash` in `flake.nix` (use `nix-prefetch-url <url>` then `nix hash convert --hash-algo sha256 --to sri <hash>`)
 3. Build: `nix build .` -- if it succeeds, patches are still valid
 4. If build fails: check the `grep -qP` verification errors to see which regex needs updating
 
@@ -183,10 +175,7 @@ Patches use `perl -pe` regex with `\w+` wildcards for minified identifiers, so v
 
 ### Build Fails at DMG Extraction
 
-```bash
-# Check if the DMG URL is still valid
-curl -sI "https://claude.ai/api/desktop/darwin/universal/dmg/latest/redirect"
-```
+The build uses `7zz` which supports LZFSE-compressed DMGs natively. If extraction fails, check if the DMG URL is still valid by downloading it in a browser from `https://claude.ai/download`.
 
 ### Wayland Issues
 
