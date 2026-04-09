@@ -1,6 +1,6 @@
 # Patching Architecture: Analysis and Automation Strategy
 
-This document describes the patching approach in `claude-for-linux`, compares it with the regex-based approach used by [`claude-desktop-linux-flake`](https://github.com/heytcass/claude-desktop-linux-flake), and documents the path toward automated, version-resilient patching.
+This document describes the patching approach in `claude-desktop-linux` and documents the path toward automated, version-resilient patching.
 
 ## Current State
 

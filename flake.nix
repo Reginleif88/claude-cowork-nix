@@ -208,7 +208,7 @@
               # --- Patch 08a: Tray icon resource path (regex) ---
               # Returns real filesystem path on Linux (COSMIC SNI can't read from ASAR)
               echo "[patch:08a] Patching tray icon resource path..."
-              perl -i -pe 's{function (\w+)\(\)\{return (\w+)\.app\.isPackaged\?(\w+)\.resourcesPath:(\w+)\.resolve\(__dirname,"\.\.","\.\.","resources"\)\}}{function $1(){return process.platform==="linux"?$4.join($4.dirname($2.app.getAppPath()),"resources"):$2.app.isPackaged?$3.resourcesPath:$4.resolve(__dirname,"..","..","resources")}}g' "$INDEX"
+              perl -i -pe 's{function ([\w\$]+)\(\)\{return ([\w\$]+)\.app\.isPackaged\?([\w\$]+)\.resourcesPath:([\w\$]+)\.resolve\(__dirname,"\.\.","\.\.","resources"\)\}}{function $1(){return process.platform==="linux"?$4.join($4.dirname($2.app.getAppPath()),"resources"):$2.app.isPackaged?$3.resourcesPath:$4.resolve(__dirname,"..","..","resources")}}g' "$INDEX"
               grep -qP 'process\.platform==="linux"\?\w+\.join\(\w+\.dirname\(' "$INDEX" \
                 || { echo "ERROR: patch 08a (tray icon path) failed to apply"; exit 1; }
               echo "[patch:08a] Done"
@@ -281,7 +281,7 @@
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postBuild = ''
               mkdir -p $out/bin
-              makeWrapper ${pkgs.electron_37}/bin/electron $out/bin/claude-desktop \
+              makeWrapper ${pkgs.electron_41}/bin/electron $out/bin/claude-desktop \
                 --add-flags "$out/lib/claude-desktop/app.asar" \
                 --add-flags "--no-sandbox" \
                 --add-flags "--ozone-platform-hint=auto" \
@@ -458,12 +458,12 @@
               nodejs
               python3
               bubblewrap
-              electron_37
+              electron_41
               dmg2img
               p7zip
 
               # Development tools
-              nodePackages.prettier
+              prettierd
             ];
 
             shellHook = ''

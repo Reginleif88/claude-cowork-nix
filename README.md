@@ -1,26 +1,42 @@
 # Claude Desktop for Linux
 
-[![Nix Flake](https://img.shields.io/badge/Nix-Flake-5277C3?logo=nixos&logoColor=white)](https://github.com/heytcass/claude-for-linux)
-[![Platform](https://img.shields.io/badge/Platform-Linux-blue?logo=linux&logoColor=white)](https://github.com/heytcass/claude-for-linux)
-[![License](https://img.shields.io/badge/License-Personal%20Use-orange)](./LICENSE)
-[![Claude Desktop](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2Fheytcass%2Fclaude-for-linux%2Fmain%2Fflake.nix&search=claudeVersion%20%3D%20%22(%5B%5E%22%5D%2B)%22&replace=v$1&label=Claude%20Desktop&color=d97757)](https://claude.ai)
+[![Nix Flake](https://img.shields.io/badge/Nix-Flake-5277C3?logo=nixos&logoColor=white)](https://github.com/Reginleif88/claude-desktop-linux)
+[![Platform](https://img.shields.io/badge/Platform-Linux-blue?logo=linux&logoColor=white)](https://github.com/Reginleif88/claude-desktop-linux)
+[![License](https://img.shields.io/badge/License-Apache--2.0%20OR%20MIT-blue)](./LICENSE-APACHE)
+[![Claude Desktop](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2FReginleif88%2Fclaude-desktop-linux%2Fmain%2Fflake.nix&search=claudeVersion%20%3D%20%22(%5B%5E%22%5D%2B)%22&replace=v$1&label=Claude%20Desktop&color=d97757)](https://claude.ai)
 [![Cowork](https://img.shields.io/badge/Cowork-Enabled-green)](./COWORK_PROGRESS.md)
 
-Fully declarative NixOS package for Claude Desktop on Linux with Cowork support. Extracts from the macOS DMG, patches for Linux compatibility, and wraps with Electron 37.
+Fully declarative NixOS package for Claude Desktop on Linux with Cowork support. Extracts from the macOS DMG, patches for Linux compatibility, and wraps with Electron 41.
+
+> Originally created by [Tom Cassady (@heytcass)](https://github.com/heytcass).
+> Based on [claude-desktop-linux-flake](https://github.com/heytcass/claude-desktop-linux-flake).
+>
+> **This is not an official Anthropic product.** Claude Desktop is property of Anthropic.
+
+## Prerequisites
+
+Nix with flakes enabled:
+
+```bash
+# NixOS users: already have Nix
+# Others: install Nix
+sh <(curl -L https://nixos.org/nix/install) --daemon
+
+# Enable flakes (add to ~/.config/nix/nix.conf)
+experimental-features = nix-command flakes
+```
 
 ## Quick Start
 
-### NixOS / Nix (Recommended)
-
 ```bash
 # Run directly
-nix run github:heytcass/claude-for-linux
+nix run github:Reginleif88/claude-desktop-linux
 
-# With FHS wrapper (better MCP + Cowork compatibility)
-nix run github:heytcass/claude-for-linux#claude-desktop-fhs
+# With FHS wrapper (recommended for Cowork + MCP)
+nix run github:Reginleif88/claude-desktop-linux#claude-desktop-fhs
 
 # Install to profile
-nix profile install github:heytcass/claude-for-linux
+nix profile install github:Reginleif88/claude-desktop-linux
 ```
 
 ### NixOS Module
@@ -28,13 +44,18 @@ nix profile install github:heytcass/claude-for-linux
 ```nix
 # flake.nix
 {
-  inputs.claude-for-linux.url = "github:heytcass/claude-for-linux";
+  inputs.claude-for-linux.url = "github:Reginleif88/claude-desktop-linux";
 
   outputs = { self, nixpkgs, claude-for-linux, ... }: {
     nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
       modules = [
         claude-for-linux.nixosModules.default
-        { programs.claude-desktop.enable = true; }
+        {
+          programs.claude-desktop = {
+            enable = true;
+            fhs = true;   # Use FHS wrapper (default: true)
+          };
+        }
       ];
     };
   };
@@ -48,16 +69,24 @@ nix profile install github:heytcass/claude-for-linux
   imports = [ claude-for-linux.homeManagerModules.default ];
   programs.claude-desktop = {
     enable = true;
-    fhs = true;  # FHS wrapper for MCP compatibility
+    fhs = true;               # FHS wrapper (default: true)
+    createDesktopEntry = true; # XDG desktop entry (default: true)
   };
 }
 ```
 
-See [NIX_README.md](./NIX_README.md) for detailed configuration options.
+## Package Variants
 
-### Ubuntu/Debian (Legacy)
+| Package | Description | Use Case |
+|---------|-------------|----------|
+| `claude-desktop` (default) | Direct electron wrapper | Simple usage, minimal deps |
+| `claude-desktop-fhs` | `buildFHSEnv` wrapper | Cowork, MCP servers, tools needing `/usr/bin` paths |
+| `claude-app` | Just the patched app.asar | Building custom wrappers |
+| `asar-tool` | Python ASAR extract/pack tool | Development |
 
-The `scripts/` directory contains older Ubuntu-specific scripts for Claude Desktop v1.1.1200. These target a pre-installed Electron app at `/opt/claude-desktop/`.
+The **FHS variant** wraps Claude in a `buildFHSEnv` environment with `/usr/bin/bwrap`, `/usr/bin/node`, `/usr/bin/python3`, standard library paths, and common tools (git, curl, docker-client, coreutils). Recommended when using Cowork or MCP servers that expect FHS layout.
+
+The **direct variant** runs electron directly with `makeWrapper`. It sets `BWRAP_PATH` and adds bubblewrap to `PATH`, but MCP servers may not find expected binaries.
 
 ## What Works
 
@@ -79,21 +108,25 @@ macOS DMG (fetchurl)
        |
   asar_tool.py extract -> raw JS
        |
-  8 patches:
+  10 patches:
     00: Native module stub (@ant/claude-native + AuthRequest)
     01: Cowork module loader (claude-cowork-linux)
     02: Platform flag (route Linux through TypeScript VM path)
-    03: Availability check (NH() returns supported)
-    04: Skip bundle download (TCe() short-circuit)
-    05: VM start intercept (ppt() -> bubblewrap session)
-    06: VM getter override (Ai() + fwe())
+    03: Availability check (return "supported" for Linux)
+    04: Skip bundle download (short-circuit on Linux)
+    05: VM start intercept (bubblewrap session via dynamic discovery)
+    06: VM getter override (return Linux VM instance)
     07: Platform branding ("for Linux" in UI)
+    08: Tray icon (theme-aware PNGs for Linux)
+    09: DBus tray cleanup delay (stability fix)
        |
   asar_tool.py pack -> patched app.asar
        |
-  electron_37 + makeWrapper -> claude-desktop
+  electron_41 + makeWrapper -> claude-desktop
   buildFHSEnv -> claude-desktop-fhs
 ```
+
+Claude Desktop has two VM paths: macOS via `@ant/claude-swift` (Swift native module) and Windows via a TypeScript VM client over IPC sockets. By setting the platform flag (patch 02), Linux routes through the TypeScript path. The VM start function (patch 05) then creates a bubblewrap session instead of connecting to a Windows IPC server.
 
 ## Project Structure
 
@@ -113,8 +146,10 @@ macOS DMG (fetchurl)
 │   │   ├── 05-vm-start-intercept.js
 │   │   ├── 06-vm-getter.js
 │   │   └── 07-platform-branding.js
-│   ├── patch-cowork-*.js             # Legacy patches for v1.1.1200
-│   └── install-*.sh                  # Legacy Ubuntu install scripts
+│   ├── branding-fix.js               # Platform branding patch
+│   ├── cowork-init.js                # Cowork initialization
+│   ├── patch-vm-start.js             # VM start intercept
+│   └── update-flake-version.sh       # Version bump helper
 ├── tools/
 │   └── asar_tool.py                  # ASAR archive manipulation
 └── examples/                         # NixOS/Home Manager config examples
@@ -130,8 +165,57 @@ nix develop
 nix build .#claude-desktop      # Basic variant
 nix build .#claude-desktop-fhs  # FHS variant
 nix flake check                 # Validate structure
+
+# Launch and check logs
+nix run . 2>&1 | grep -E "Cowork|error"
+```
+
+### Updating to New Versions
+
+Patches use `perl -pe` regex with `\w+` wildcards for minified identifiers, so version bumps should not require patch changes.
+
+1. Get the new DMG URL: `curl -sI https://claude.ai/api/desktop/darwin/universal/dmg/latest/redirect | grep location`
+2. Update `claudeVersion` and `claudeDmgHash` in `flake.nix`
+3. Build: `nix build .` -- if it succeeds, patches are still valid
+4. If build fails: check the `grep -qP` verification errors to see which regex needs updating
+
+## Troubleshooting
+
+### Build Fails at DMG Extraction
+
+```bash
+# Check if the DMG URL is still valid
+curl -sI "https://claude.ai/api/desktop/darwin/universal/dmg/latest/redirect"
+```
+
+### Wayland Issues
+
+The wrapper passes `--ozone-platform-hint=auto`. To force Wayland:
+
+```bash
+claude-desktop --ozone-platform=wayland
+```
+
+### Cowork Not Appearing
+
+```bash
+nix build .#claude-app -L 2>&1 | grep -E "Patch|applied|WARNING"
+```
+
+All patches should show "applied" with no "WARNING" lines.
+
+### Bubblewrap Permission Errors
+
+On some systems, user namespaces may be restricted:
+
+```bash
+sysctl kernel.unprivileged_userns_clone
+# Should be 1. If 0:
+sudo sysctl kernel.unprivileged_userns_clone=1
 ```
 
 ## License
 
-For personal use only. Claude Desktop is property of Anthropic.
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT License](LICENSE-MIT), at your option.
+
+Claude Desktop itself is property of Anthropic. This project provides only the packaging and patching code.

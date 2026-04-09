@@ -8,7 +8,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
     claude-for-linux = {
-      url = "github:heytcass/claude-for-linux";
+      url = "github:Reginleif88/claude-desktop-linux";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
