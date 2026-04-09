@@ -378,7 +378,7 @@
             package = lib.mkOption {
               type = lib.types.package;
               default = self.packages.${pkgs.system}.claude-desktop;
-              defaultText = lib.literalExpression "claude-for-linux.packages.\${system}.claude-desktop";
+              defaultText = lib.literalExpression "claude-cowork-nix.packages.\${system}.claude-desktop";
               description = "The Claude Desktop package to use.";
             };
 
@@ -413,7 +413,7 @@
             package = lib.mkOption {
               type = lib.types.package;
               default = self.packages.${pkgs.system}.claude-desktop;
-              defaultText = lib.literalExpression "claude-for-linux.packages.\${system}.claude-desktop";
+              defaultText = lib.literalExpression "claude-cowork-nix.packages.\${system}.claude-desktop";
               description = "The Claude Desktop package to use.";
             };
 

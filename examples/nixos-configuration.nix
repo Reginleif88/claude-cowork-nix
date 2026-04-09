@@ -5,9 +5,9 @@
 
 {
   # Import the Claude Desktop flake module
-  # (Assumes you've added it to your flake inputs as "claude-for-linux")
+  # (Assumes you've added it to your flake inputs as "claude-cowork-nix")
   imports = [
-    inputs.claude-for-linux.nixosModules.default
+    inputs.claude-cowork-nix.nixosModules.default
   ];
 
   programs.claude-desktop = {

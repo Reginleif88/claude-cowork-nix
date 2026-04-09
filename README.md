@@ -1,9 +1,9 @@
-# Claude Desktop for Linux
+# Claude Cowork Nix
 
-[![Nix Flake](https://img.shields.io/badge/Nix-Flake-5277C3?logo=nixos&logoColor=white)](https://github.com/Reginleif88/claude-desktop-linux)
-[![Platform](https://img.shields.io/badge/Platform-Linux-blue?logo=linux&logoColor=white)](https://github.com/Reginleif88/claude-desktop-linux)
+[![Nix Flake](https://img.shields.io/badge/Nix-Flake-5277C3?logo=nixos&logoColor=white)](https://github.com/Reginleif88/claude-cowork-nix)
+[![Platform](https://img.shields.io/badge/Platform-Linux-blue?logo=linux&logoColor=white)](https://github.com/Reginleif88/claude-cowork-nix)
 [![License](https://img.shields.io/badge/License-Apache--2.0%20OR%20MIT-blue)](./LICENSE-APACHE)
-[![Claude Desktop](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2FReginleif88%2Fclaude-desktop-linux%2Fmain%2Fflake.nix&search=claudeVersion%20%3D%20%22(%5B%5E%22%5D%2B)%22&replace=v$1&label=Claude%20Desktop&color=d97757)](https://claude.ai)
+[![Claude Desktop](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2FReginleif88%2Fclaude-cowork-nix%2Fmain%2Fflake.nix&search=claudeVersion%20%3D%20%22(%5B%5E%22%5D%2B)%22&replace=v$1&label=Claude%20Desktop&color=d97757)](https://claude.ai)
 [![Cowork](https://img.shields.io/badge/Cowork-Enabled-green)](./COWORK_PROGRESS.md)
 
 Fully declarative NixOS package for Claude Desktop on Linux with Cowork support. Extracts from the macOS DMG, patches for Linux compatibility, and wraps with Electron 41.
@@ -30,13 +30,13 @@ experimental-features = nix-command flakes
 
 ```bash
 # Run directly
-nix run github:Reginleif88/claude-desktop-linux
+nix run github:Reginleif88/claude-cowork-nix
 
 # With FHS wrapper (recommended for Cowork + MCP)
-nix run github:Reginleif88/claude-desktop-linux#claude-desktop-fhs
+nix run github:Reginleif88/claude-cowork-nix#claude-desktop-fhs
 
 # Install to profile
-nix profile install github:Reginleif88/claude-desktop-linux
+nix profile install github:Reginleif88/claude-cowork-nix
 ```
 
 ### NixOS Module
@@ -44,12 +44,12 @@ nix profile install github:Reginleif88/claude-desktop-linux
 ```nix
 # flake.nix
 {
-  inputs.claude-for-linux.url = "github:Reginleif88/claude-desktop-linux";
+  inputs.claude-cowork-nix.url = "github:Reginleif88/claude-cowork-nix";
 
-  outputs = { self, nixpkgs, claude-for-linux, ... }: {
+  outputs = { self, nixpkgs, claude-cowork-nix, ... }: {
     nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
       modules = [
-        claude-for-linux.nixosModules.default
+        claude-cowork-nix.nixosModules.default
         {
           programs.claude-desktop = {
             enable = true;
@@ -66,7 +66,7 @@ nix profile install github:Reginleif88/claude-desktop-linux
 
 ```nix
 {
-  imports = [ claude-for-linux.homeManagerModules.default ];
+  imports = [ claude-cowork-nix.homeManagerModules.default ];
   programs.claude-desktop = {
     enable = true;
     fhs = true;               # FHS wrapper (default: true)

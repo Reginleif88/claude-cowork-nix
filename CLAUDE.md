@@ -1,4 +1,4 @@
-# claude-desktop-linux
+# claude-cowork-nix
 
 Enabling macOS-only Claude Desktop features on Linux via runtime patching.
 

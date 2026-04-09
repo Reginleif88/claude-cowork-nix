@@ -5,9 +5,9 @@
 
 {
   # Import the Claude Desktop Home Manager module
-  # (Assumes you've added it to your flake inputs as "claude-for-linux")
+  # (Assumes you've added it to your flake inputs as "claude-cowork-nix")
   imports = [
-    inputs.claude-for-linux.homeManagerModules.default
+    inputs.claude-cowork-nix.homeManagerModules.default
   ];
 
   programs.claude-desktop = {

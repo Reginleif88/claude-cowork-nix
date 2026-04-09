@@ -1,4 +1,4 @@
-# Example flake.nix that uses claude-for-linux
+# Example flake.nix that uses claude-cowork-nix
 # This shows how to integrate Claude Desktop into your system flake
 
 {
@@ -7,8 +7,8 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    claude-for-linux = {
-      url = "github:Reginleif88/claude-desktop-linux";
+    claude-cowork-nix = {
+      url = "github:Reginleif88/claude-cowork-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -18,7 +18,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, claude-for-linux, home-manager, ... }@inputs: {
+  outputs = { self, nixpkgs, claude-cowork-nix, home-manager, ... }@inputs: {
     # NixOS system configuration
     nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
@@ -26,7 +26,7 @@
       modules = [
         ./hardware-configuration.nix
 
-        claude-for-linux.nixosModules.default
+        claude-cowork-nix.nixosModules.default
 
         {
           programs.claude-desktop = {
@@ -42,7 +42,7 @@
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
       extraSpecialArgs = { inherit inputs; };
       modules = [
-        claude-for-linux.homeManagerModules.default
+        claude-cowork-nix.homeManagerModules.default
 
         {
           programs.claude-desktop = {
