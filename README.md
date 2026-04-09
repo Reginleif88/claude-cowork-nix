@@ -98,7 +98,7 @@ The **direct variant** runs electron directly with `makeWrapper`. It sets `BWRAP
 - **Claude Code** tool execution
 - **File uploads and downloads**
 - **Full chat** functionality
-- **Cowork** directory picker and bubblewrap sandboxing (WIP - see [COWORK_PROGRESS.md](./COWORK_PROGRESS.md))
+- **Cowork** sessions with Claude Code (see [COWORK_PROGRESS.md](./COWORK_PROGRESS.md))
 
 ## Architecture
 

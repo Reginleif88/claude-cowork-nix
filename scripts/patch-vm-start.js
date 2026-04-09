@@ -58,27 +58,63 @@ const injection = `async function ${funcName}(${params.join(',')}){
       const sessionId=randomUUID();
       manager.createSession(sessionId);
       console.log("[Cowork Linux] Session created:",sessionId);
+      const _procs=new Map();
       const vmInstance={
         sessionId,
         isConnected:()=>true,
         isGuestConnected:()=>Promise.resolve(true),
-        isProcessRunning:(name)=>Promise.resolve(name==="__heartbeat_ping__"),
+        isProcessRunning:(id)=>{if(id==="__heartbeat_ping__")return Promise.resolve(true);const p=_procs.get(id);return Promise.resolve(p?!p.killed:false)},
         startVM:async()=>{},
         stopVM:async()=>{},
         installSdk:async()=>{},
-        setEventCallbacks:()=>{},
+        setEventCallbacks:(onStdout,onStderr,onExit,onError)=>{global.__linuxCowork._eventCbs={onStdout,onStderr,onExit,onError}},
         executeCommand:(cmd)=>manager.spawnSandboxed(sessionId,cmd.command,cmd.args||[]),
         addMount:(hostPath)=>manager.addMount(sessionId,hostPath),
-        dispose:()=>{manager.destroySession(sessionId);delete global.__linuxCowork.vmInstance},
+        dispose:()=>{_procs.forEach((p)=>{try{p.kill()}catch(e){}});_procs.clear();manager.destroySession(sessionId);delete global.__linuxCowork.vmInstance},
         addApprovedOauthToken:()=>Promise.resolve(),
-        spawn:(command,args)=>{
-          const procInfo=manager.spawnSandboxed(sessionId,command,args||[]);
-          const child=procInfo.child;
-          return new Proxy(child,{get(target,prop){
-            if(prop==='writeStdin')return(data)=>{if(target.stdin)target.stdin.write(data)};
-            if(prop==='processId')return procInfo.id;
-            const val=target[prop];return typeof val==='function'?val.bind(target):val;
-          }});
+        writeStdin:async(id,data)=>{const p=_procs.get(id);if(p&&p.stdin&&!p.stdin.destroyed){let d=typeof data==="string"?data:data.toString();if(!d.endsWith("\\n"))d+="\\n";p.stdin.write(d)}},
+        kill:async(id,signal)=>{const p=_procs.get(id);if(p){p.kill(signal||"SIGTERM")}},
+        spawn:(id,name,command,args,cwd,env,additionalMounts,isResume,allowedDomains,oneShot)=>{
+          console.log("[Cowork Linux] spawn:",id,name,command,"cwd=",cwd);
+          let resolvedCmd=command;
+          if(command==="/usr/local/bin/claude"||command==="claude"){
+            const tryPaths=[process.env.HOME+"/.local/bin/claude","/etc/profiles/per-user/"+process.env.USER+"/bin/claude","/usr/local/bin/claude"];
+            const found=tryPaths.find(p=>require("fs").existsSync(p));
+            if(found){resolvedCmd=found;console.log("[Cowork Linux] Resolved claude ->",found)}
+            else{console.error("[Cowork Linux] claude binary not found in:",tryPaths)}
+          }
+          let resolvedCwd=process.env.HOME;
+          if(typeof cwd==="string"){
+            if(cwd.startsWith("/sessions/")){
+              const _fs=require("fs"),_path=require("path");
+              resolvedCwd=_path.join("/tmp/claude-cowork-sessions",sessionId,"sessions",_path.basename(cwd));
+              _fs.mkdirSync(resolvedCwd,{recursive:true});
+              console.log("[Cowork Linux] Mapped VM cwd",cwd,"->",resolvedCwd);
+            }else if(require("fs").existsSync(cwd)){
+              resolvedCwd=cwd;
+            }else{
+              console.warn("[Cowork Linux] cwd not found, using HOME:",cwd);
+            }
+          }
+          const {spawn:_spawn}=require("child_process");
+          const mergedEnv={...process.env,...(env&&typeof env==="object"?env:{})};
+          // Fix VM-internal paths for Linux host
+          if(mergedEnv.CLAUDE_CONFIG_DIR&&mergedEnv.CLAUDE_CONFIG_DIR.startsWith("/sessions/")){
+            const _path=require("path"),_fs=require("fs");
+            const hostConfigDir=_path.join(resolvedCwd,"mnt",".claude");
+            _fs.mkdirSync(hostConfigDir,{recursive:true});
+            mergedEnv.CLAUDE_CONFIG_DIR=hostConfigDir;
+            console.log("[Cowork Linux] Mapped CLAUDE_CONFIG_DIR ->",hostConfigDir);
+          }
+          // Remove empty ANTHROPIC_API_KEY (OAuth token is used instead)
+          if(mergedEnv.ANTHROPIC_API_KEY==="")delete mergedEnv.ANTHROPIC_API_KEY;
+          const child=_spawn(resolvedCmd,args||[],{stdio:["pipe","pipe","pipe"],cwd:resolvedCwd,env:mergedEnv});
+          _procs.set(id,child);
+          const cbs=global.__linuxCowork._eventCbs||{};
+          if(child.stdout)child.stdout.on("data",(d)=>{if(cbs.onStdout)cbs.onStdout(id,d.toString())});
+          if(child.stderr)child.stderr.on("data",(d)=>{if(cbs.onStderr)cbs.onStderr(id,d.toString())});
+          child.on("exit",(code,sig)=>{_procs.delete(id);if(cbs.onExit)cbs.onExit(id,code,sig)});
+          child.on("error",(e)=>{console.error("[Cowork Linux] spawn error id="+id+":",e.message);if(cbs.onError)cbs.onError(id,e.message,true)});
         },
         exec:(command)=>manager.spawnSandboxed(sessionId,'/bin/sh',['-c',command]),
         mkdir:()=>Promise.resolve(),
@@ -87,9 +123,10 @@ const injection = `async function ${funcName}(${params.join(',')}){
         rm:()=>Promise.resolve(),
         configure:async()=>{},
         createVM:async()=>{},
+        mountPath:async()=>{},
         getVmProcessId:()=>'cowork-linux-'+sessionId.slice(0,8),
         connect:async()=>{},
-        disconnect:async()=>{manager.destroySession(sessionId)},
+        disconnect:async()=>{_procs.forEach((p)=>{try{p.kill()}catch(e){}});_procs.clear();manager.destroySession(sessionId)},
       };
       global.__linuxCowork.vmInstance=vmInstance;
       try{${statusDispatch}}catch(e){console.log("[Cowork Linux] Status dispatch note:",e.message)}
