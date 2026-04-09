@@ -129,15 +129,15 @@ Claude Desktop has two VM paths: macOS via `@ant/claude-swift` (Swift native mod
 .
 ├── flake.nix                         # Full NixOS package definition
 ├── modules/
-│   ├── claude-cowork-linux.js        # Bubblewrap session manager
+│   ├── claude-cowork-linux.js        # Cowork session manager
 │   └── enhanced-claude-native-stub.js # Linux native module replacement
 ├── scripts/
 │   ├── branding-fix.js               # Platform branding patch
 │   ├── cowork-init.js                # Cowork initialization
-│   ├── patch-vm-start.js             # VM start intercept
-│   └── update-flake-version.sh       # Version bump helper
+│   └── patch-vm-start.js             # VM start intercept (spawn, writeStdin, mounts)
 ├── tools/
-│   └── asar_tool.py                  # ASAR archive manipulation
+│   ├── asar_tool.py                  # ASAR archive extract/pack
+│   └── icns_extract.py               # macOS icon extraction
 └── examples/                         # NixOS/Home Manager config examples
 ```
 
@@ -181,7 +181,7 @@ claude-desktop --ozone-platform=wayland
 ### Cowork Not Appearing
 
 ```bash
-nix build .#claude-app -L 2>&1 | grep -E "Patch|applied|WARNING"
+nix build . -L 2>&1 | grep -E "patch|applied|WARNING|ERROR"
 ```
 
 All patches should show "applied" with no "WARNING" lines.
