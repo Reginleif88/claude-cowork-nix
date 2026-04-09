@@ -45,11 +45,11 @@ See `docs/patching-architecture.md` for the full technical analysis.
 | # | Method | Purpose |
 |---|--------|---------|
 | 00 | File copy | Electron API stubs for Linux (`@ant/claude-native`) |
-| 01 | Append IIFE | Load bubblewrap Cowork module |
+| 01 | Append IIFE | Load Cowork module |
 | 02 | `perl -pe` regex | Route Linux through VM path (platform flag) |
 | 03 | `perl -pe` regex | Return "supported" for Linux availability |
 | 04 | `perl -pe` regex | Skip macOS VM bundle download |
-| 05 | Node.js dynamic | Create bubblewrap session at VM start |
+| 05 | Node.js dynamic | Create Linux session at VM start (spawn, writeStdin, mounts, path translation) |
 | 06 | `perl -pe` regex | Return Linux VM instance from getters |
 | 07 | Append IIFE | Replace "for Windows"/"for Mac" with "for Linux" |
 | 08 | `perl -pe` regex | Use theme-aware PNGs for tray icon |

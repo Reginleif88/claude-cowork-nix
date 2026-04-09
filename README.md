@@ -98,7 +98,7 @@ The **direct variant** runs electron directly with `makeWrapper`. It sets `BWRAP
 - **Claude Code** tool execution
 - **File uploads and downloads**
 - **Full chat** functionality
-- **Cowork** sessions with Claude Code (see [COWORK_PROGRESS.md](./COWORK_PROGRESS.md))
+- **Cowork** sessions with Claude Code — multi-turn, file ops, directory picker, transcript persistence (see [COWORK_PROGRESS.md](./COWORK_PROGRESS.md))
 
 ## Architecture
 
@@ -115,7 +115,7 @@ macOS DMG (fetchurl)
     02: Platform flag (route Linux through TypeScript VM path)
     03: Availability check (return "supported" for Linux)
     04: Skip bundle download (short-circuit on Linux)
-    05: VM start intercept (bubblewrap session via dynamic discovery)
+    05: VM start intercept (Linux session with spawn, writeStdin, mounts)
     06: VM getter override (return Linux VM instance)
     07: Platform branding ("for Linux" in UI)
     08: Tray icon (theme-aware PNGs for Linux)
@@ -127,7 +127,7 @@ macOS DMG (fetchurl)
   buildFHSEnv -> claude-desktop-fhs
 ```
 
-Claude Desktop has two VM paths: macOS via `@ant/claude-swift` (Swift native module) and Windows via a TypeScript VM client over IPC sockets. By setting the platform flag (patch 02), Linux routes through the TypeScript path. The VM start function (patch 05) then creates a bubblewrap session instead of connecting to a Windows IPC server.
+Claude Desktop has two VM paths: macOS via `@ant/claude-swift` (Swift native module) and Windows via a TypeScript VM client over IPC sockets. By setting the platform flag (patch 02), Linux routes through the TypeScript path. The VM start function (patch 05) creates a Linux session that spawns Claude Code directly on the host, translates VM-internal paths to real host paths, and manages process I/O via the SDK wire protocol.
 
 ## Project Structure
 
