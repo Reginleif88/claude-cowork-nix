@@ -51,13 +51,18 @@ if (statusMatch) {
 // Build the injection block
 const injection = `async function ${funcName}(${params.join(',')}){
   if(process.platform==="linux"&&global.__linuxCowork&&!global.__linuxCowork.vmInstance){
-    console.log("[Cowork Linux] Creating bubblewrap session");
+    console.log("[Cowork Linux] Creating session");
     const {manager}=global.__linuxCowork;
     try {
-      const {randomUUID}=require('crypto');
-      const sessionId=randomUUID();
+      // Use stable sessionId so session data persists across app restarts
+      const _fs0=require("fs"),_path0=require("path"),_crypto0=require("crypto");
+      const _markerDir=_path0.join(process.env.HOME||"/tmp",".config","Claude","cowork-linux");
+      _fs0.mkdirSync(_markerDir,{recursive:true});
+      const _markerFile=_path0.join(_markerDir,"session-id");
+      let sessionId;
+      try{sessionId=_fs0.readFileSync(_markerFile,"utf8").trim()}catch(e){sessionId=_crypto0.randomUUID();_fs0.writeFileSync(_markerFile,sessionId)}
       manager.createSession(sessionId);
-      console.log("[Cowork Linux] Session created:",sessionId);
+      console.log("[Cowork Linux] Session:",sessionId);
       const _procs=new Map();
       const _sessionBase=require("path").join("/tmp/claude-cowork-sessions",sessionId);
       const _resolvePath=(p)=>{if(typeof p==="string"&&p.startsWith("/sessions/")){const parts=p.split("/");const name=parts[2];return require("path").join(_sessionBase,"sessions",name,...parts.slice(3))}return p};
