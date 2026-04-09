@@ -331,6 +331,13 @@
               wget
             ];
             runScript = "${claudeDesktop}/bin/claude-desktop";
+            # Bind /tmp/sessions -> /sessions so Cowork VM-internal paths resolve
+            extraPreBwrapCmds = ''
+              mkdir -p /tmp/sessions
+            '';
+            extraBwrapArgs = [
+              "--symlink" "/tmp/sessions" "/sessions"
+            ];
             meta = with pkgs.lib; {
               description = "Claude Desktop for Linux (FHS) with Cowork and MCP support";
               homepage = "https://claude.ai";

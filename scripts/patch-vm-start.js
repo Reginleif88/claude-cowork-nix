@@ -93,6 +93,13 @@ const injection = `async function ${funcName}(${params.join(',')}){
           const _fs=require("fs"),_path=require("path");
           // Create session directory structure
           let sessionDir=_path.join(_sessionBase,"sessions",name);
+          // Create /tmp/sessions/<name> -> sessionDir symlink for Bash tool compatibility
+          // Claude Code generates /sessions/<name>/mnt/... paths (VM-internal)
+          // FHS variant binds /tmp/sessions -> /sessions, making them accessible
+          const _tmpSessions="/tmp/sessions";
+          _fs.mkdirSync(_tmpSessions,{recursive:true});
+          const _tmpLink=_path.join(_tmpSessions,name);
+          try{if(!_fs.existsSync(_tmpLink))_fs.symlinkSync(sessionDir,_tmpLink)}catch(e){}
           _fs.mkdirSync(sessionDir,{recursive:true});
           // Set up mnt/ with symlinks from additionalMounts
           const mntDir=_path.join(sessionDir,"mnt");
