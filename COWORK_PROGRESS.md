@@ -23,6 +23,7 @@ Cowork is running on Linux. Claude Code spawns inside Cowork sessions, processes
 
 ### Known Limitations
 
+- **Session resume broken**: Continuing a previous Cowork conversation fails with "No conversation found". Each spawn creates a new temp session directory with a different cwd, so Claude Code's project hash changes and it can't find the old session data. On macOS, the VM filesystem persists across spawns.
 - **No bubblewrap sandboxing**: Claude Code runs directly on the host. NixOS paths are incompatible with simple bwrap bind-mounts — needs Nix store mounts.
 - **Executable file preview blocked**: `.sh`, `.exe` etc. can't be opened in UI file preview — this is upstream security behavior, not a Linux-specific issue.
 - **`getAppInfoForFile` missing**: Native stub doesn't implement this, causes harmless error when UI tries to detect which app opens a file.
