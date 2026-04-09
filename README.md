@@ -6,10 +6,11 @@
 [![Claude Desktop](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2FReginleif88%2Fclaude-cowork-nix%2Fmain%2Fflake.nix&search=claudeVersion%20%3D%20%22(%5B%5E%22%5D%2B)%22&replace=v$1&label=Claude%20Desktop&color=d97757)](https://claude.ai)
 [![Cowork](https://img.shields.io/badge/Cowork-Enabled-green)](./COWORK_PROGRESS.md)
 
-Fully declarative NixOS package for Claude Desktop on Linux with Cowork support. Extracts from the macOS DMG (with native LZFSE support), patches for Linux compatibility, and wraps with Electron 41.
+Fully declarative NixOS package for Claude Desktop on Linux with Cowork support. Extracts from the macOS DMG, patches for Linux compatibility, and wraps with Electron 41.
 
 > Originally created by [Tom Cassady (@heytcass)](https://github.com/heytcass).
 > Based on [claude-desktop-linux-flake](https://github.com/heytcass/claude-desktop-linux-flake).
+> Codebase maintained with [Claude Code](https://claude.ai/code).
 >
 > **This is not an official Anthropic product.** Claude Desktop is property of Anthropic.
 
