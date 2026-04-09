@@ -32,9 +32,6 @@ experimental-features = nix-command flakes
 # Run directly
 nix run github:Reginleif88/claude-cowork-nix
 
-# With FHS wrapper (recommended for Cowork + MCP)
-nix run github:Reginleif88/claude-cowork-nix#claude-desktop-fhs
-
 # Install to profile
 nix profile install github:Reginleif88/claude-cowork-nix
 ```
@@ -77,16 +74,13 @@ nix profile install github:Reginleif88/claude-cowork-nix
 
 ## Package Variants
 
-| Package | Description | Use Case |
-|---------|-------------|----------|
-| `claude-desktop` (default) | Direct electron wrapper | Simple usage, minimal deps |
-| `claude-desktop-fhs` | `buildFHSEnv` wrapper | Cowork, MCP servers, tools needing `/usr/bin` paths |
-| `claude-app` | Just the patched app.asar | Building custom wrappers |
-| `asar-tool` | Python ASAR extract/pack tool | Development |
+| Package | Description |
+|---------|-------------|
+| `default` | FHS-wrapped Claude Desktop with Cowork, MCP, and `/sessions` path support |
+| `claude-app` | Just the patched app.asar (for custom wrappers) |
+| `asar-tool` | Python ASAR extract/pack tool (development) |
 
-The **FHS variant** wraps Claude in a `buildFHSEnv` environment with `/usr/bin/bwrap`, `/usr/bin/node`, `/usr/bin/python3`, standard library paths, and common tools (git, curl, docker-client, coreutils). Recommended when using Cowork or MCP servers that expect FHS layout.
-
-The **direct variant** runs electron directly with `makeWrapper`. It sets `BWRAP_PATH` and adds bubblewrap to `PATH`, but MCP servers may not find expected binaries.
+The default package wraps Claude in a `buildFHSEnv` environment with `/usr/bin/bwrap`, `/usr/bin/node`, `/usr/bin/python3`, standard library paths, common tools (git, curl, docker-client, coreutils), and a `/sessions` symlink for Cowork VM path resolution.
 
 ## What Works
 
@@ -123,8 +117,7 @@ macOS DMG (fetchurl)
        |
   asar_tool.py pack -> patched app.asar
        |
-  electron_41 + makeWrapper -> claude-desktop
-  buildFHSEnv -> claude-desktop-fhs
+  electron_41 + makeWrapper + buildFHSEnv -> claude-desktop
 ```
 
 Claude Desktop has two VM paths: macOS via `@ant/claude-swift` (Swift native module) and Windows via a TypeScript VM client over IPC sockets. By setting the platform flag (patch 02), Linux routes through the TypeScript path. The VM start function (patch 05) creates a Linux session that spawns Claude Code directly on the host, translates VM-internal paths to real host paths, and manages process I/O via the SDK wire protocol.
@@ -154,8 +147,7 @@ Claude Desktop has two VM paths: macOS via `@ant/claude-swift` (Swift native mod
 nix develop
 
 # Build and test
-nix build .#claude-desktop      # Basic variant
-nix build .#claude-desktop-fhs  # FHS variant
+nix build .
 nix flake check                 # Validate structure
 
 # Launch and check logs

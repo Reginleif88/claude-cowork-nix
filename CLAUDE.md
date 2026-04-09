@@ -13,13 +13,11 @@ Enabling macOS-only Claude Desktop features on Linux via runtime patching.
 
 ```bash
 # Build
-nix build .                     # Default (direct electron wrapper)
-nix build .#claude-desktop-fhs  # FHS wrapper (Cowork + MCP)
+nix build .                     # Default (FHS wrapper with Cowork + MCP)
 nix build .#claude-app          # Just the patched app.asar
 
 # Run
 nix run .
-nix run .#claude-desktop-fhs
 
 # Validate
 nix flake check

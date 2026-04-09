@@ -23,7 +23,7 @@ Cowork is running on Linux. Claude Code spawns inside Cowork sessions, processes
 
 ### Known Limitations
 
-- **Bash tool uses VM paths**: Claude Code generates `/sessions/<name>/mnt/...` paths for shell commands, but these don't exist on the host. It recovers by using `~/` paths, but the initial attempt fails. Needs symlink or path hint.
+- **Non-FHS variant lacks `/sessions` path**: The direct electron wrapper can't create `/sessions` at root. Use the FHS variant (now default) which symlinks `/sessions` → `/tmp/sessions` via bwrap.
 - **No bubblewrap sandboxing**: Claude Code runs directly on the host. NixOS paths are incompatible with simple bwrap bind-mounts — needs Nix store mounts.
 - **Executable file preview blocked**: `.sh`, `.exe` etc. can't be opened in UI file preview — this is upstream security behavior, not a Linux-specific issue.
 - **`getAppInfoForFile` missing**: Native stub doesn't implement this, causes harmless error when UI tries to detect which app opens a file.

@@ -347,7 +347,7 @@
           };
 
         in {
-          default = claudeDesktop;
+          default = claudeDesktopFHS;
           claude-desktop = claudeDesktop;
           claude-desktop-fhs = claudeDesktopFHS;
           claude-app = claudeApp;
