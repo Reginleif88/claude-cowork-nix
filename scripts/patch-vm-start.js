@@ -77,7 +77,7 @@ const injection = `async function ${funcName}(${params.join(',')}){
         writeStdin:async(id,data)=>{const p=_procs.get(id);if(p&&p.stdin&&!p.stdin.destroyed){let d=typeof data==="string"?data:data.toString();if(!d.endsWith("\\n"))d+="\\n";p.stdin.write(d)}},
         kill:async(id,signal)=>{const p=_procs.get(id);if(p){p.kill(signal||"SIGTERM")}},
         spawn:(id,name,command,args,cwd,env,additionalMounts,isResume,allowedDomains,oneShot)=>{
-          console.log("[Cowork Linux] spawn:",id,name,command,"cwd=",cwd);
+          console.log("[Cowork Linux] spawn:",id,name,command,"cwd=",cwd,"mounts=",additionalMounts?Object.keys(additionalMounts):"none");
           let resolvedCmd=command;
           if(command==="/usr/local/bin/claude"||command==="claude"){
             const tryPaths=[process.env.HOME+"/.local/bin/claude","/etc/profiles/per-user/"+process.env.USER+"/bin/claude","/usr/local/bin/claude"];
@@ -85,28 +85,52 @@ const injection = `async function ${funcName}(${params.join(',')}){
             if(found){resolvedCmd=found;console.log("[Cowork Linux] Resolved claude ->",found)}
             else{console.error("[Cowork Linux] claude binary not found in:",tryPaths)}
           }
-          let resolvedCwd=process.env.HOME;
-          if(typeof cwd==="string"){
-            if(cwd.startsWith("/sessions/")){
-              const _fs=require("fs"),_path=require("path");
-              resolvedCwd=_path.join("/tmp/claude-cowork-sessions",sessionId,"sessions",_path.basename(cwd));
-              _fs.mkdirSync(resolvedCwd,{recursive:true});
-              console.log("[Cowork Linux] Mapped VM cwd",cwd,"->",resolvedCwd);
-            }else if(require("fs").existsSync(cwd)){
-              resolvedCwd=cwd;
-            }else{
-              console.warn("[Cowork Linux] cwd not found, using HOME:",cwd);
+          const _fs=require("fs"),_path=require("path");
+          // Create session directory structure
+          let sessionDir=_path.join(_sessionBase,"sessions",name);
+          _fs.mkdirSync(sessionDir,{recursive:true});
+          // Set up mnt/ with symlinks from additionalMounts
+          const mntDir=_path.join(sessionDir,"mnt");
+          _fs.mkdirSync(mntDir,{recursive:true});
+          if(additionalMounts&&typeof additionalMounts==="object"){
+            // Sort by depth so parent mounts are created before children
+            const sortedMounts=Object.entries(additionalMounts).sort((a,b)=>a[0].split("/").length-b[0].split("/").length);
+            const createdMounts=new Set();
+            for(const [mountName,mountInfo] of sortedMounts){
+              const mountPoint=_path.join(mntDir,mountName);
+              const hostPath=mountInfo&&mountInfo.path?mountInfo.path:null;
+              // Skip if a parent mount already covers this path (e.g., .claude/skills inside .claude)
+              const isNested=[...createdMounts].some(m=>mountName.startsWith(m+"/"));
+              if(isNested){console.log("[Cowork Linux] mount:",mountName,"(nested, skipped)");continue}
+              if(hostPath&&!_fs.existsSync(mountPoint)){
+                const resolvedHost=hostPath.startsWith("/")?hostPath:"/"+hostPath;
+                try{_fs.mkdirSync(_path.dirname(mountPoint),{recursive:true});_fs.symlinkSync(resolvedHost,mountPoint);createdMounts.add(mountName);console.log("[Cowork Linux] mount:",mountName,"->",resolvedHost)}
+                catch(e){console.warn("[Cowork Linux] mount symlink failed:",mountName,e.message);_fs.mkdirSync(mountPoint,{recursive:true})}
+              }else if(!_fs.existsSync(mountPoint)){_fs.mkdirSync(mountPoint,{recursive:true})}
             }
           }
+          // Resolve cwd: use session dir (which has mnt/ structure)
+          let resolvedCwd=sessionDir;
+          if(typeof cwd==="string"&&!cwd.startsWith("/sessions/")&&_fs.existsSync(cwd)){
+            resolvedCwd=cwd;
+          }
+          console.log("[Cowork Linux] cwd ->",resolvedCwd);
           const {spawn:_spawn}=require("child_process");
           const mergedEnv={...process.env,...(env&&typeof env==="object"?env:{})};
-          // Fix VM-internal paths for Linux host
+          // Fix CLAUDE_CONFIG_DIR: use host path from additionalMounts if available
           if(mergedEnv.CLAUDE_CONFIG_DIR&&mergedEnv.CLAUDE_CONFIG_DIR.startsWith("/sessions/")){
-            const _path=require("path"),_fs=require("fs");
-            const hostConfigDir=_path.join(resolvedCwd,"mnt",".claude");
+            let hostConfigDir=null;
+            if(additionalMounts&&additionalMounts[".claude"]&&additionalMounts[".claude"].path){
+              hostConfigDir=additionalMounts[".claude"].path;
+              // The path from additionalMounts might be in VM subpath format (no leading /)
+              if(!hostConfigDir.startsWith("/"))hostConfigDir="/"+hostConfigDir;
+            }
+            if(!hostConfigDir||!_fs.existsSync(_path.dirname(hostConfigDir))){
+              hostConfigDir=_path.join(sessionDir,"mnt",".claude");
+            }
             _fs.mkdirSync(hostConfigDir,{recursive:true});
             mergedEnv.CLAUDE_CONFIG_DIR=hostConfigDir;
-            console.log("[Cowork Linux] Mapped CLAUDE_CONFIG_DIR ->",hostConfigDir);
+            console.log("[Cowork Linux] CLAUDE_CONFIG_DIR ->",hostConfigDir);
           }
           // Remove empty ANTHROPIC_API_KEY (OAuth token is used instead)
           if(mergedEnv.ANTHROPIC_API_KEY==="")delete mergedEnv.ANTHROPIC_API_KEY;
@@ -125,7 +149,11 @@ const injection = `async function ${funcName}(${params.join(',')}){
         rm:(p)=>{try{require("fs").rmSync(_resolvePath(p),{recursive:true,force:true})}catch(e){};return Promise.resolve()},
         configure:async()=>{},
         createVM:async()=>{},
-        mountPath:async(processId,subpath,mountName,mode)=>{const _fs=require("fs"),_path=require("path");const mntDir=_path.join(_sessionBase,subpath,mountName);_fs.mkdirSync(mntDir,{recursive:true});console.log("[Cowork Linux] mountPath:",mountName,"->",mntDir,"mode:",mode)},
+        mountPath:async(processId,subpath,mountName,mode)=>{const _fs=require("fs"),_path=require("path");const mntDir=_path.join(_sessionBase,subpath,mountName);if(!_fs.existsSync(mntDir)){_fs.mkdirSync(_path.dirname(mntDir),{recursive:true});
+          // Check if this is a user folder mount - subpath contains the vmProcessName
+          // The desktop app will call mountPath after the user picks a directory
+          // hostPath info comes through the mount registry, not this call
+          _fs.mkdirSync(mntDir,{recursive:true})};console.log("[Cowork Linux] mountPath:",mountName,"at",mntDir,"mode:",mode)},
         getVmProcessId:()=>'cowork-linux-'+sessionId.slice(0,8),
         connect:async()=>{},
         disconnect:async()=>{_procs.forEach((p)=>{try{p.kill()}catch(e){}});_procs.clear();manager.destroySession(sessionId)},
