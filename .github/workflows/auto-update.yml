@@ -1,0 +1,217 @@
+name: Auto-update Claude Desktop
+
+on:
+  schedule:
+    - cron: "0 8 * * *" # Daily at 08:00 UTC
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Force update even if version matches"
+        required: false
+        default: "false"
+        type: boolean
+
+concurrency:
+  group: auto-update
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-latest
+    outputs:
+      pr_created: ${{ steps.pr.outputs.pr_created }}
+      pr_number: ${{ steps.pr.outputs.pr_number }}
+      pr_branch: ${{ steps.pr.outputs.pr_branch }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve latest version
+        id: resolve
+        run: |
+          current=$(grep -oP 'claudeVersion = "\K[^"]+' flake.nix)
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "Current version: $current"
+
+          latest=""
+          dmg_url=""
+
+          # Strategy 1: CDN RELEASES.json (Squirrel manifest — not behind Cloudflare)
+          echo "--- Trying RELEASES.json ---"
+          json=$(curl -sf --max-time 15 \
+            "https://downloads.claude.ai/releases/darwin/universal/RELEASES.json" 2>/dev/null) || true
+
+          if [ -n "$json" ]; then
+            latest=$(echo "$json" | jq -r '.currentRelease // empty')
+            zip_url=$(echo "$json" | jq -r '.releases[0].updateTo.url // empty')
+            if [ -n "$latest" ] && [ -n "$zip_url" ]; then
+              dmg_url="${zip_url%.zip}.dmg"
+              echo "Resolved via RELEASES.json: v$latest"
+            fi
+          fi
+
+          # Strategy 2: claude.ai JSON API
+          if [ -z "$dmg_url" ]; then
+            echo "--- Trying JSON API ---"
+            api=$(curl -sf --max-time 15 \
+              "https://claude.ai/api/desktop/darwin/universal/dmg/latest" 2>/dev/null) || true
+
+            if [ -n "$api" ]; then
+              latest=$(echo "$api" | jq -r '.version // empty')
+              dmg_url=$(echo "$api" | jq -r '.url // empty')
+              [ -n "$dmg_url" ] && echo "Resolved via JSON API: v$latest"
+            fi
+          fi
+
+          if [ -z "$dmg_url" ] || [ -z "$latest" ]; then
+            echo "::error::Could not resolve latest DMG URL"
+            exit 1
+          fi
+
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "dmg_url=$dmg_url" >> "$GITHUB_OUTPUT"
+
+          if [ "$current" = "$latest" ] && [ "${{ inputs.force }}" != "true" ]; then
+            echo "Already up-to-date at v$current"
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Update available: v$current -> v$latest"
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Nix
+        if: steps.resolve.outputs.needs_update == 'true'
+        uses: DeterminateSystems/determinate-nix-action@v3
+
+      - name: Prefetch and update flake
+        if: steps.resolve.outputs.needs_update == 'true'
+        id: update
+        env:
+          LATEST: ${{ steps.resolve.outputs.latest }}
+          DMG_URL: ${{ steps.resolve.outputs.dmg_url }}
+        run: |
+          echo "Prefetching $DMG_URL ..."
+          nix_hash=$(nix-prefetch-url --type sha256 "$DMG_URL")
+          sri_hash=$(nix-hash --type sha256 --to-sri "$nix_hash")
+          echo "SRI hash: $sri_hash"
+          echo "sri_hash=$sri_hash" >> "$GITHUB_OUTPUT"
+
+          sed -i \
+            -e "s|claudeVersion = \"[^\"]*\"|claudeVersion = \"$LATEST\"|" \
+            -e "s|claudeDmgHash = \"[^\"]*\"|claudeDmgHash = \"$sri_hash\"|" \
+            -e "s|claudeDmgUrl = \"[^\"]*\"|claudeDmgUrl = \"$DMG_URL\"|" \
+            flake.nix
+
+          echo "Updated flake.nix:"
+          grep -E 'claude(Version|DmgHash|DmgUrl)' flake.nix
+
+      - name: Create PR
+        if: steps.resolve.outputs.needs_update == 'true'
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT: ${{ steps.resolve.outputs.current }}
+          LATEST: ${{ steps.resolve.outputs.latest }}
+          DMG_URL: ${{ steps.resolve.outputs.dmg_url }}
+          SRI_HASH: ${{ steps.update.outputs.sri_hash }}
+        run: |
+          branch="auto-update/claude-v${LATEST}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add flake.nix
+          git commit -m "Update Claude Desktop DMG to v${LATEST}"
+
+          # Push (force if branch already exists from a previous run)
+          git push -u origin "$branch" 2>/dev/null \
+            || git push -u origin "$branch" --force
+
+          # If a PR already exists for this branch, just re-trigger the build
+          existing_pr=$(gh pr view "$branch" --json number --jq '.number' 2>/dev/null) || true
+          if [ -n "$existing_pr" ]; then
+            echo "PR #$existing_pr already exists for $branch, updated via force-push"
+            echo "pr_created=true" >> "$GITHUB_OUTPUT"
+            echo "pr_number=$existing_pr" >> "$GITHUB_OUTPUT"
+            echo "pr_branch=$branch" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          gh pr create \
+            --title "Update Claude Desktop to v${LATEST}" \
+            --body "$(cat <<EOF
+          Automated update: Claude Desktop v${CURRENT} → v${LATEST}
+
+          | Field | Value |
+          |-------|-------|
+          | **DMG URL** | \`${DMG_URL}\` |
+          | **SRI hash** | \`${SRI_HASH}\` |
+
+          > Build verification runs automatically on this PR.
+          > Patches use \`perl -pe\` regex with \`\\w+\` wildcards — most version bumps apply cleanly.
+          EOF
+          )" \
+            --label automated --label update \
+            --head "$branch"
+
+          echo "pr_created=true" >> "$GITHUB_OUTPUT"
+          echo "pr_number=$(gh pr view "$branch" --json number --jq '.number')" >> "$GITHUB_OUTPUT"
+          echo "pr_branch=$branch" >> "$GITHUB_OUTPUT"
+
+  verify-build:
+    needs: check-and-update
+    if: needs.check-and-update.outputs.pr_created == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.check-and-update.outputs.pr_branch }}
+
+      - name: Install Nix
+        uses: DeterminateSystems/determinate-nix-action@v3
+
+      - name: Build
+        id: build
+        continue-on-error: true
+        run: nix build . --print-build-logs 2>&1 | tee build.log
+
+      - name: Report result
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ needs.check-and-update.outputs.pr_number }}
+        run: |
+          if [ "${{ steps.build.outcome }}" = "success" ]; then
+            gh pr comment "$PR" --body-file - <<'EOF'
+          **Build verified** — `nix build .` succeeded. Patches apply cleanly.
+
+          - [x] Build passes
+          - [ ] Application launches correctly (manual check)
+          EOF
+          else
+            # Write body to file to avoid shell expansion of build log contents
+            cat > /tmp/comment.md <<'EOF'
+          **Build failed** — patches likely need updating for the new minified JS.
+
+          See `CLAUDE.md` for the patching workflow. The `grep -qP` verification
+          lines in the build log show which regex patterns no longer match.
+
+          <details>
+          <summary>Build output (last 100 lines)</summary>
+
+          ```
+          EOF
+            tail -100 build.log >> /tmp/comment.md
+            cat >> /tmp/comment.md <<'EOF'
+          ```
+
+          </details>
+          EOF
+            gh pr comment "$PR" --body-file /tmp/comment.md
+            gh pr ready "$PR" --undo || true
+          fi
