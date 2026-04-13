@@ -1,6 +1,6 @@
 # Cowork on Linux - Progress Report
 
-## Current Status: v1.1348.0 — Cowork Functional
+## Current Status: v1.1617.0 — Cowork Functional
 
 Cowork is running on Linux via a fully declarative Nix flake. Claude Code spawns inside Cowork sessions, processes messages via the SDK wire protocol, streams responses, and persists transcripts across app restarts.
 
@@ -16,6 +16,8 @@ Cowork is running on Linux via a fully declarative Nix flake. Claude Code spawns
 8. **MCP servers**: Initialize and function within Cowork sessions
 9. **Persistent auth tokens**: `--password-store=gnome-libsecret` (KDE Wallet, GNOME Keyring)
 10. **NixOS + Home Manager modules**: `programs.claude-desktop.enable`
+11. **In-app ClaudeCode (CCD) feature**: Anthropic's in-app Claude Code daemon initializes and reports `[CCD] Status: ready` (verified with v2.1.92 binary fetched from Anthropic's CDN)
+12. **Shell PATH augmentation**: shellPathWorker resolves login-shell env vars into the app process (`[CCD] Resolved N CC env vars from login shell`)
 
 ### Known Limitations
 
@@ -23,14 +25,14 @@ Cowork is running on Linux via a fully declarative Nix flake. Claude Code spawns
 - **Executable file preview blocked**: `.sh`, `.exe` etc. can't be opened in UI preview — upstream security behavior, not Linux-specific.
 - **Missing native stub functions**: `getAppInfoForFile` and `getWindowsElevationType` cause harmless log errors.
 - **Missing `cowork-plugin-shim.sh`**: Plugin permission bridge not implemented. Warns in logs but doesn't block functionality.
-- **Cosmetic VM download error**: `Cannot read properties of undefined (reading 'x64')` — harmless, download is skipped by patch 04.
-- **In-app ClaudeCode feature requires Linux binary**: Patch 10 unblocks `getHostPlatform` to return `linux-x64`, but downstream binary fetch may 404 if Anthropic's CDN doesn't serve a Linux ClaudeCode tarball — needs end-to-end verification.
-- **Find-in-page preload origin error**: Cosmetic — `DesktopIntl` origin allowlist doesn't recognize `file:///nix/store/` paths. Falls back to default English locale.
-- **`model_configs/[1m]` 404**: 1M-context Opus model_config endpoint returns 404. Server-side, not patchable here.
+- **Cosmetic VM download error**: `Cannot read properties of undefined (reading 'x64')` — harmless, download is skipped by patch 04. Status query (`ClaudeVM.getDownloadStatus`) is not stubbed and produces one error per launch.
+- **Find-in-page preload origin error**: Cosmetic — `DesktopIntl` origin allowlist doesn't recognize `file:///nix/store/` paths. Falls back to default English locale; in-app Ctrl+F search may be affected.
+- **`model_configs/[1m]` 404**: 1M-context Opus `model_config` endpoint returns 404. Server-side (likely URL-encoding of the `[1m]` suffix or org entitlement), not patchable here.
+- **`BuddyBleTransport.reportState`**: Bluetooth IPC handler not registered on Linux. Fires once at startup; harmless.
 
 ## Architecture
 
-### Patch Chain (v1.1348.0)
+### Patch Chain (v1.1617.0)
 
 All patches use version-resilient `\w+` regex wildcards for minified identifiers. Function names are discovered at build time, not hardcoded.
 
@@ -91,8 +93,10 @@ User sends message in Cowork UI
 1. Add missing native stub functions (`getAppInfoForFile`, `getWindowsElevationType`)
 2. Implement `cowork-plugin-shim.sh` for plugin permissions
 3. Investigate bubblewrap sandboxing (requires Nix store bind-mounts)
+4. Stub `ClaudeVM.getDownloadStatus` to silence the once-per-launch cosmetic error
+5. Patch `DesktopIntl` origin allowlist to accept `file:///nix/store/` paths (would fix find-in-page preload + locale init)
 
 ---
 
-**Last Updated**: 2026-04-09
-**Claude Desktop Version**: 1.1348.0
+**Last Updated**: 2026-04-13
+**Claude Desktop Version**: 1.1617.0

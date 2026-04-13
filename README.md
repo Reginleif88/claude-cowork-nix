@@ -3,7 +3,7 @@
 [![Nix Flake](https://img.shields.io/badge/Nix-Flake-5277C3?logo=nixos&logoColor=white)](https://github.com/Reginleif88/claude-cowork-nix)
 [![Platform](https://img.shields.io/badge/Platform-Linux-blue?logo=linux&logoColor=white)](https://github.com/Reginleif88/claude-cowork-nix)
 [![License](https://img.shields.io/badge/License-Apache--2.0%20OR%20MIT-blue)](./LICENSE-APACHE)
-[![Claude Desktop](https://img.shields.io/badge/Claude_Desktop-v1.1348.0-d97757)](https://claude.ai)
+[![Claude Desktop](https://img.shields.io/badge/Claude_Desktop-v1.1617.0-d97757)](https://claude.ai)
 [![Cowork](https://img.shields.io/badge/Cowork-Enabled-green)](./COWORK_PROGRESS.md)
 
 Fully declarative NixOS package for Claude Desktop on Linux with Cowork support. Extracts from the macOS DMG, patches for Linux compatibility, and wraps with Electron 41.
@@ -104,7 +104,7 @@ macOS DMG (fetchurl)
        |
   asar_tool.py extract -> raw JS
        |
-  10 patches:
+  12 patches:
     00: Native module stub (@ant/claude-native + AuthRequest)
     01: Cowork module loader (claude-cowork-linux)
     02: Platform flag (route Linux through TypeScript VM path)
@@ -115,6 +115,8 @@ macOS DMG (fetchurl)
     07: Platform branding ("for Linux" in UI)
     08: Tray icon (theme-aware PNGs for Linux)
     09: DBus tray cleanup delay (stability fix)
+    10: ClaudeCode getHostPlatform (Linux branch for in-app feature)
+    11: shellPathWorker resolution (use process.argv[1], not resourcesPath)
        |
   asar_tool.py pack -> patched app.asar
        |
