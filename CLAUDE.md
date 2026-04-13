@@ -52,6 +52,8 @@ See `docs/patching-architecture.md` for the full technical analysis.
 | 07 | Append IIFE | Replace "for Windows"/"for Mac" with "for Linux" |
 | 08 | `perl -pe` regex | Use theme-aware PNGs for tray icon |
 | 09 | `perl -pe` regex | DBus tray cleanup delay for stability |
+| 10 | `perl -pe` regex | Add Linux to ClaudeCode `getHostPlatform` (in-app Claude Code feature) |
+| 11 | `perl -pe` regex | Resolve `shellPathWorker.js` from Claude's asar (not Electron runtime's) |
 
 ## Electron Gotchas
 

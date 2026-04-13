@@ -222,6 +222,27 @@
               perl -i -pe 's{(\w+)&&\(\1\.destroy\(\),\1=null\)}{$1&&($1.destroy(),$1=null,setTimeout(()=>{},250))}g' "$INDEX"
               echo "[patch:09] Done"
 
+              # --- Patch 10: ClaudeCode platform support (regex) ---
+              # ClaudeCode's getHostPlatform() throws "Unsupported platform" on Linux,
+              # causing the renderer to spam getStatus errors every ~10s. Add a Linux branch
+              # so the in-app Claude Code feature can attempt to initialize.
+              echo "[patch:10] Patching ClaudeCode getHostPlatform..."
+              perl -i -pe 's{(if\(process\.platform==="win32"\)return )(\w+)(==="arm64"\?"win32-arm64":"win32-x64";)throw new Error\(`Unsupported platform:}{$1$2$3if(process.platform==="linux")return $2==="arm64"?"linux-arm64":"linux-x64";throw new Error(`Unsupported platform:}g' "$INDEX"
+              grep -qP 'if\(process\.platform==="linux"\)return \w+==="arm64"\?"linux-arm64":"linux-x64"' "$INDEX" \
+                || { echo "ERROR: patch 10 (ClaudeCode platform) failed to apply"; exit 1; }
+              echo "[patch:10] Done"
+
+              # --- Patch 11: shellPathWorker.js asar resolution (regex) ---
+              # In wrapped-Electron builds (makeWrapper), process.resourcesPath points to the
+              # Electron runtime's resources, not the Claude app.asar. Use process.argv[1]
+              # (the app.asar path passed by makeWrapper) directly — Electron's fs treats
+              # the asar path as a directory containing its archived files transparently.
+              echo "[patch:11] Patching shellPathWorker base path..."
+              perl -i -pe 's{function (\w+)\(\)\{return (\w+)\.join\(process\.resourcesPath,"app\.asar",".vite","build","shell-path-worker","shellPathWorker\.js"\)\}}{function $1(){if(process.platform==="linux"\&\&process.argv[1]\&\&process.argv[1].includes("app.asar"))return $2.join(process.argv[1],".vite","build","shell-path-worker","shellPathWorker.js");return $2.join(process.resourcesPath,"app.asar",".vite","build","shell-path-worker","shellPathWorker.js")}}g' "$INDEX"
+              grep -qP 'process\.platform==="linux"&&process\.argv\[1\]&&process\.argv\[1\]\.includes\("app\.asar"\)' "$INDEX" \
+                || { echo "ERROR: patch 11 (shellPathWorker base) failed to apply"; exit 1; }
+              echo "[patch:11] Done"
+
               # Repack ASAR
               echo "[5/6] Repacking ASAR..."
               ${asarTool}/bin/asar-tool pack extracted app.asar

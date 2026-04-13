@@ -46,7 +46,32 @@ grep -oP 'async function \w+\(\)\{const t=await \w+\(\);return\(t==null\?void 0:
 
 # Patch 08b: Tray icon filename
 grep -oP '\w+\?\w+=\w+\.nativeTheme\.shouldUseDarkColors\?"Tray-Win32-Dark\.ico":"Tray-Win32\.ico":\w+="TrayIconTemplate\.png"' $INDEX
+
+# Patch 10: ClaudeCode platform throw
+grep -oP 'if\(process\.platform==="win32"\)return \w+==="arm64"\?"win32-arm64":"win32-x64";throw new Error\(`Unsupported platform:' $INDEX
+
+# Patch 11: shellPathWorker base
+grep -oP 'function \w+\(\)\{return \w+\.join\(process\.resourcesPath,"app\.asar",".vite","build","shell-path-worker","shellPathWorker\.js"\)\}' $INDEX
 ```
+
+## Wrapped-Electron Path Resolution Gotcha
+
+In a Nix build that wraps a stock Electron with `makeWrapper` and passes `app.asar` as a positional argument:
+
+```
+electron /nix/store/<hash>-claude-desktop-<ver>/lib/claude-desktop/app.asar
+```
+
+…`process.resourcesPath` resolves to the **Electron runtime's** resources directory (`/nix/store/<hash>-electron-unwrapped-<ver>/.../resources`), NOT the directory containing Claude's app.asar. Anthropic's code assumes a normal "Electron app" layout where `process.resourcesPath` IS the directory containing app.asar (the macOS/Windows install pattern).
+
+When a patch needs to resolve a file inside Claude's app.asar at runtime, use one of:
+
+1. `process.argv[1]` — the asar path passed by `makeWrapper`. Pass it directly to `path.join(...)` to address files inside the archive (Electron's `fs` patches make `app.asar` behave as both a file AND a directory containing its archived contents). Used by patch 11.
+2. `app.getAppPath()` — the Electron-internal "app path" API, which on a wrapped build returns the asar path. Used by patch 08a.
+
+Either works; pick whichever matches the existing code's idiom around the patch site to minimize regex churn.
+
+**Subtle gotcha**: don't `path.dirname(process.argv[1])` thinking you need a "real" directory before `path.join`-ing — that strips off `app.asar` and leaves you pointing at the directory *next to* the archive, where the file doesn't exist on disk. The asar path itself is the right base.
 
 ## Version Update Workflow
 

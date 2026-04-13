@@ -24,6 +24,9 @@ Cowork is running on Linux via a fully declarative Nix flake. Claude Code spawns
 - **Missing native stub functions**: `getAppInfoForFile` and `getWindowsElevationType` cause harmless log errors.
 - **Missing `cowork-plugin-shim.sh`**: Plugin permission bridge not implemented. Warns in logs but doesn't block functionality.
 - **Cosmetic VM download error**: `Cannot read properties of undefined (reading 'x64')` — harmless, download is skipped by patch 04.
+- **In-app ClaudeCode feature requires Linux binary**: Patch 10 unblocks `getHostPlatform` to return `linux-x64`, but downstream binary fetch may 404 if Anthropic's CDN doesn't serve a Linux ClaudeCode tarball — needs end-to-end verification.
+- **Find-in-page preload origin error**: Cosmetic — `DesktopIntl` origin allowlist doesn't recognize `file:///nix/store/` paths. Falls back to default English locale.
+- **`model_configs/[1m]` 404**: 1M-context Opus model_config endpoint returns 404. Server-side, not patchable here.
 
 ## Architecture
 
@@ -43,6 +46,8 @@ All patches use version-resilient `\w+` regex wildcards for minified identifiers
 | 07 | Append IIFE | Replace "for Windows"/"for Mac" with "for Linux" |
 | 08 | `perl -pe` regex | Use theme-aware PNGs for tray icon |
 | 09 | `perl -pe` regex | DBus tray cleanup delay for stability |
+| 10 | `perl -pe` regex | Add Linux to ClaudeCode `getHostPlatform` (in-app Claude Code feature) |
+| 11 | `perl -pe` regex | Resolve `shellPathWorker.js` from Claude's asar (not Electron runtime's) |
 
 ### Session Flow
 
