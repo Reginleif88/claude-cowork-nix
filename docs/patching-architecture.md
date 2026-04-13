@@ -47,9 +47,6 @@ grep -oP 'async function \w+\(\)\{const t=await \w+\(\);return\(t==null\?void 0:
 # Patch 08b: Tray icon filename
 grep -oP '\w+\?\w+=\w+\.nativeTheme\.shouldUseDarkColors\?"Tray-Win32-Dark\.ico":"Tray-Win32\.ico":\w+="TrayIconTemplate\.png"' $INDEX
 
-# Patch 10: ClaudeCode platform throw
-grep -oP 'if\(process\.platform==="win32"\)return \w+==="arm64"\?"win32-arm64":"win32-x64";throw new Error\(`Unsupported platform:' $INDEX
-
 # Patch 11: shellPathWorker base
 grep -oP 'function \w+\(\)\{return \w+\.join\(process\.resourcesPath,"app\.asar",".vite","build","shell-path-worker","shellPathWorker\.js"\)\}' $INDEX
 ```

@@ -95,6 +95,19 @@ The default package wraps Claude in a `buildFHSEnv` environment with `/usr/bin/b
 - **Full chat** functionality
 - **Cowork** sessions with Claude Code — multi-turn, file ops, directory picker, transcript persistence (see [COWORK_PROGRESS.md](./COWORK_PROGRESS.md))
 
+## Partially Working — the "Code" section
+
+The Claude Code section in the left sidebar has four sub-modes. Status on Linux:
+
+| Mode | Status | Why |
+|------|--------|-----|
+| **LOCAL** (spawn Claude Code on this machine) | ❌ Broken | Goes through Anthropic's newer "CCD" daemon which assumes macOS/Windows-shaped platform data. The Linux main process answers `getHostPlatform`, but the web UI (loaded from claude.ai, not our asar) then crashes on downstream IPC fields that are undefined on Linux, and Anthropic's `model_configs/[1m]` server endpoint 404s — together these block the send button. Not patchable from the Electron side. |
+| **SSH** (run Claude Code on a remote host via SSH) | ✅ Works | Doesn't touch the local CCD path; the web UI talks directly to the remote. |
+| **Cloud Environment** (Anthropic-managed) | ✅ Works | Same as SSH — bypasses local platform gates. |
+| **Remote Control** | ✅ Works | Same as SSH. |
+
+**For local Claude Code work, use a Cowork chat instead of the LOCAL mode.** Cowork provides the same agent capabilities (spawn, tools, streaming, multi-turn, file operations) through Anthropic's older local-agent IPC path that still works on Linux. Patch 10 was briefly attempted to unblock LOCAL mode and was reverted after confirming the remaining failures live outside our patchable surface; see [COWORK_PROGRESS.md](./COWORK_PROGRESS.md) for the investigation notes.
+
 ## Architecture
 
 ```
@@ -104,7 +117,7 @@ macOS DMG (fetchurl)
        |
   asar_tool.py extract -> raw JS
        |
-  12 patches:
+  11 patches:
     00: Native module stub (@ant/claude-native + AuthRequest)
     01: Cowork module loader (claude-cowork-linux)
     02: Platform flag (route Linux through TypeScript VM path)
@@ -115,7 +128,6 @@ macOS DMG (fetchurl)
     07: Platform branding ("for Linux" in UI)
     08: Tray icon (theme-aware PNGs for Linux)
     09: DBus tray cleanup delay (stability fix)
-    10: ClaudeCode getHostPlatform (Linux branch for in-app feature)
     11: shellPathWorker resolution (use process.argv[1], not resourcesPath)
        |
   asar_tool.py pack -> patched app.asar

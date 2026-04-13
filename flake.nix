@@ -222,16 +222,6 @@
               perl -i -pe 's{(\w+)&&\(\1\.destroy\(\),\1=null\)}{$1&&($1.destroy(),$1=null,setTimeout(()=>{},250))}g' "$INDEX"
               echo "[patch:09] Done"
 
-              # --- Patch 10: ClaudeCode platform support (regex) ---
-              # ClaudeCode's getHostPlatform() throws "Unsupported platform" on Linux,
-              # causing the renderer to spam getStatus errors every ~10s. Add a Linux branch
-              # so the in-app Claude Code feature can attempt to initialize.
-              echo "[patch:10] Patching ClaudeCode getHostPlatform..."
-              perl -i -pe 's{(if\(process\.platform==="win32"\)return )(\w+)(==="arm64"\?"win32-arm64":"win32-x64";)throw new Error\(`Unsupported platform:}{$1$2$3if(process.platform==="linux")return $2==="arm64"?"linux-arm64":"linux-x64";throw new Error(`Unsupported platform:}g' "$INDEX"
-              grep -qP 'if\(process\.platform==="linux"\)return \w+==="arm64"\?"linux-arm64":"linux-x64"' "$INDEX" \
-                || { echo "ERROR: patch 10 (ClaudeCode platform) failed to apply"; exit 1; }
-              echo "[patch:10] Done"
-
               # --- Patch 11: shellPathWorker.js asar resolution (regex) ---
               # In wrapped-Electron builds (makeWrapper), process.resourcesPath points to the
               # Electron runtime's resources, not the Claude app.asar. Use process.argv[1]
