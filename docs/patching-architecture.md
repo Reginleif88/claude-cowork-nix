@@ -11,7 +11,7 @@ A **hybrid** strategy combining inline `perl -pe` regex substitutions with a dyn
 - **2 file-based patches** (00, 01, 07) append or copy standalone JavaScript files
 - Each regex patch is verified with a `grep -qP` post-check that fails the build on mismatch
 
-This approach has survived across v1.1.2685, v1.1.3770, and v1.1348.0 (including a major versioning scheme change) without requiring patch rewrites for most patches.
+This approach has survived across v1.1.2685, v1.1.3770, v1.1348.0, v1.1617.0, and v1.2278.0 (including a major versioning scheme change) without requiring patch rewrites for most patches. The v1.2278.0 bump needed one narrow fix: patch 03's function-name capture widened from `\w+` to `[\w\$]+` because Anthropic's minifier produced `J$n` (with a literal `$`) for the target function.
 
 ## Why Regex Works
 

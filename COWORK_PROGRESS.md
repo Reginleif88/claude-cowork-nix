@@ -1,6 +1,6 @@
 # Cowork on Linux - Progress Report
 
-## Current Status: v1.1617.0 — Cowork Functional
+## Current Status: v1.2278.0 — Cowork + Code/LOCAL Functional
 
 Cowork is running on Linux via a fully declarative Nix flake. Claude Code spawns inside Cowork sessions, processes messages via the SDK wire protocol, streams responses, and persists transcripts across app restarts.
 
@@ -27,15 +27,14 @@ Cowork is running on Linux via a fully declarative Nix flake. Claude Code spawns
 - **Missing `cowork-plugin-shim.sh`**: Plugin permission bridge not implemented. Warns in logs but doesn't block functionality.
 - **Cosmetic VM download error**: `Cannot read properties of undefined (reading 'x64')` — harmless, download is skipped by patch 04. Status query (`ClaudeVM.getDownloadStatus`) is not stubbed and produces one error per launch.
 - **Find-in-page preload origin error**: Cosmetic — `DesktopIntl` origin allowlist doesn't recognize `file:///nix/store/` paths. Falls back to default English locale; in-app Ctrl+F search may be affected.
-- **`model_configs/[1m]` 404**: 1M-context Opus `model_config` endpoint returns 404. Server-side (likely URL-encoding of the `[1m]` suffix or org entitlement), not patchable here.
 - **`BuddyBleTransport.reportState`**: Bluetooth IPC handler not registered on Linux. Fires once at startup; harmless.
 - **In-app Code section → LOCAL mode** requires opt-in: set `programs.claude-desktop.claudeCodePackage = <claude-code package>` (e.g. `pkgs.claude-code` or `inputs.claude-code.packages.${system}.default`). Without this, the Electron process has no `CLAUDE_CODE_LOCAL_BINARY` set, so CCD falls back to its built-in `getHostPlatform` path which still throws on Linux (producing polling-loop log noise but not crashing the app). The earlier `undefined.includes()` and `model_configs/[1m]` 404 blockers are resolved by patch 12 regardless. **SSH / Cloud Environment / Remote-control modes** continue to work (bypass CCD entirely).
 
 ## Architecture
 
-### Patch Chain (v1.1617.0)
+### Patch Chain (v1.2278.0)
 
-All patches use version-resilient `\w+` regex wildcards for minified identifiers. Function names are discovered at build time, not hardcoded.
+All patches use version-resilient `\w+` (or `[\w\$]+` where minified names contain `$`) regex wildcards for minified identifiers. Function names are discovered at build time, not hardcoded.
 
 | # | Method | Purpose |
 |---|--------|---------|
@@ -100,5 +99,5 @@ User sends message in Cowork UI
 
 ---
 
-**Last Updated**: 2026-04-13
-**Claude Desktop Version**: 1.1617.0
+**Last Updated**: 2026-04-14
+**Claude Desktop Version**: 1.2278.0
