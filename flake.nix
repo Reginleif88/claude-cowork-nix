@@ -20,11 +20,14 @@
         value = f system;
       }) supportedSystems);
 
-    in {
-      packages = forEachSystem (system:
+      # Per-pkgs builder factory. Takes a nixpkgs instance and returns the
+      # set of derivations and package-builder functions. Shared between
+      # `packages` (built from the flake's nixpkgs) and the NixOS / Home
+      # Manager modules (built from the user's nixpkgs). This lets the
+      # modules rebuild the wrapper with a user-supplied `claudeCodePackage`
+      # without re-implementing the wrapper logic.
+      mkBuildersFor = pkgs:
         let
-          pkgs = nixpkgs.legacyPackages.${system};
-
           # Fetch macOS DMG
           claudeSrc = pkgs.fetchurl {
             url = claudeDmgUrl;
@@ -233,6 +236,22 @@
                 || { echo "ERROR: patch 11 (shellPathWorker base) failed to apply"; exit 1; }
               echo "[patch:11] Done"
 
+              # --- Patch 12: Neutralize [1m] model-suffix feature flag (regex) ---
+              # Anthropic's GrowthBook flag 3885610113 appends "[1m]" to opus-4-6/sonnet-4-6
+              # model ids, which 404s on /api/.../model_configs/claude-opus-4-6[1m] and
+              # cascades into undefined.includes() in the renderer, disabling the Code
+              # section's LOCAL-mode send button. Replace the suffix function body with
+              # `return t` so model ids are passed through unchanged.
+              echo "[patch:12] Neutralizing [1m] model-suffix feature flag..."
+              grep -qP 'function \w+\(t\)\{return/\\\[1m\\\]/i\.test' "$INDEX" \
+                || { echo "ERROR: patch 12 target function not found (pre-check)"; exit 1; }
+              perl -i -pe 's{function (\w+)\(t\)\{return/\\\[1m\\\]/i\.test\(t\)\|\|!\w+\("3885610113"\)\|\|!/sonnet-4-6\|opus-4-6/i\.test\(t\)\?t:`\$\{t\}\[1m\]`\}}{function $1(t){return t}}g' "$INDEX"
+              if grep -qP 'function \w+\(t\)\{return/\\\[1m\\\]/i\.test' "$INDEX"; then
+                echo "ERROR: patch 12 ([1m] suffix) did not neutralize target"
+                exit 1
+              fi
+              echo "[patch:12] Done"
+
               # Repack ASAR
               echo "[5/6] Repacking ASAR..."
               ${asarTool}/bin/asar-tool pack extracted app.asar
@@ -280,8 +299,11 @@
             '';
           };
 
-          # Basic Claude Desktop wrapper (direct electron)
-          claudeDesktop = pkgs.symlinkJoin {
+          # Basic Claude Desktop wrapper (direct electron) — parameterized on
+          # claudeCodePackage. When non-null, wires CLAUDE_CODE_LOCAL_BINARY so
+          # the Code section's LOCAL sub-mode spawns that binary instead of
+          # trying to download via CCD (which throws on Linux).
+          mkClaudeDesktop = claudeCodePackage: pkgs.symlinkJoin {
             name = "claude-desktop-${claudeVersion}";
             paths = [ claudeApp ];
             nativeBuildInputs = [ pkgs.makeWrapper ];
@@ -296,7 +318,9 @@
                 --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.bubblewrap ]} \
                 --set BWRAP_PATH "${pkgs.bubblewrap}/bin/bwrap" \
                 --set CHROME_DESKTOP "claude-desktop.desktop" \
-                --prefix XDG_DATA_DIRS : "$out/share"
+                --prefix XDG_DATA_DIRS : "$out/share" \
+                ${pkgs.lib.optionalString (claudeCodePackage != null)
+                  ''--set-default CLAUDE_CODE_LOCAL_BINARY "${claudeCodePackage}/bin/claude"''}
 
               # Desktop entry
               mkdir -p $out/share/applications
@@ -321,8 +345,9 @@
             };
           };
 
-          # FHS wrapper for maximum compatibility (cowork + MCP)
-          claudeDesktopFHS = pkgs.buildFHSEnv {
+          # FHS wrapper for maximum compatibility (cowork + MCP) — parameterized
+          # on claudeCodePackage, threaded through to the inner wrapper.
+          mkClaudeDesktopFHS = claudeCodePackage: pkgs.buildFHSEnv {
             name = "claude-desktop";
             targetPkgs = pkgs: with pkgs; [
               bubblewrap
@@ -341,7 +366,7 @@
               curl
               wget
             ];
-            runScript = "${claudeDesktop}/bin/claude-desktop";
+            runScript = "${mkClaudeDesktop claudeCodePackage}/bin/claude-desktop";
             # Bind /tmp/sessions -> /sessions so Cowork VM-internal paths resolve
             extraPreBwrapCmds = ''
               mkdir -p /tmp/sessions
@@ -357,12 +382,32 @@
             };
           };
 
+          # Default package variants: no claude-code wired in. Users enable
+          # LOCAL mode via the module option `claudeCodePackage` (see below),
+          # or by setting CLAUDE_CODE_LOCAL_BINARY externally.
+          claudeDesktop = mkClaudeDesktop null;
+          claudeDesktopFHS = mkClaudeDesktopFHS null;
+
         in {
-          default = claudeDesktopFHS;
-          claude-desktop = claudeDesktop;
-          claude-desktop-fhs = claudeDesktopFHS;
-          claude-app = claudeApp;
-          asar-tool = asarTool;
+          inherit
+            claudeApp
+            asarTool
+            mkClaudeDesktop
+            mkClaudeDesktopFHS
+            claudeDesktop
+            claudeDesktopFHS;
+        };
+
+    in {
+      packages = forEachSystem (system:
+        let
+          b = mkBuildersFor nixpkgs.legacyPackages.${system};
+        in {
+          default = b.claudeDesktopFHS;
+          claude-desktop = b.claudeDesktop;
+          claude-desktop-fhs = b.claudeDesktopFHS;
+          claude-app = b.claudeApp;
+          asar-tool = b.asarTool;
         }
       );
 
@@ -385,13 +430,14 @@
       nixosModules.default = { config, lib, pkgs, ... }:
         let
           cfg = config.programs.claude-desktop;
+          b = mkBuildersFor pkgs;
         in {
           options.programs.claude-desktop = {
             enable = lib.mkEnableOption "Claude Desktop with Cowork support";
 
             package = lib.mkOption {
               type = lib.types.package;
-              default = self.packages.${pkgs.system}.claude-desktop;
+              default = b.claudeDesktop;
               defaultText = lib.literalExpression "claude-cowork-nix.packages.\${system}.claude-desktop";
               description = "The Claude Desktop package to use.";
             };
@@ -401,13 +447,30 @@
               default = true;
               description = "Use FHS wrapper for better MCP and Cowork compatibility.";
             };
+
+            claudeCodePackage = lib.mkOption {
+              type = lib.types.nullOr lib.types.package;
+              default = null;
+              example = lib.literalExpression "pkgs.claude-code";
+              description = ''
+                Claude Code package whose `/bin/claude` will be wired as
+                `CLAUDE_CODE_LOCAL_BINARY`, enabling the Code section's LOCAL
+                sub-mode on Linux by short-circuiting the CCD daemon's
+                `getHostPlatform` throw. When null (default), LOCAL mode
+                remains unavailable unless the env var is set externally.
+
+                Typical values:
+                  pkgs.claude-code                                    # nixpkgs
+                  inputs.claude-code.packages.''${system}.default       # github:sadjow/claude-code-nix
+              '';
+            };
           };
 
           config = lib.mkIf cfg.enable {
             environment.systemPackages = [
               (if cfg.fhs
-               then self.packages.${pkgs.system}.claude-desktop-fhs
-               else cfg.package)
+               then (b.mkClaudeDesktopFHS cfg.claudeCodePackage)
+               else (b.mkClaudeDesktop cfg.claudeCodePackage))
               pkgs.bubblewrap
             ];
           };
@@ -417,16 +480,17 @@
       homeManagerModules.default = { config, lib, pkgs, ... }:
         let
           cfg = config.programs.claude-desktop;
+          b = mkBuildersFor pkgs;
           pkg = if cfg.fhs
-                then self.packages.${pkgs.system}.claude-desktop-fhs
-                else cfg.package;
+                then (b.mkClaudeDesktopFHS cfg.claudeCodePackage)
+                else (b.mkClaudeDesktop cfg.claudeCodePackage);
         in {
           options.programs.claude-desktop = {
             enable = lib.mkEnableOption "Claude Desktop with Cowork support";
 
             package = lib.mkOption {
               type = lib.types.package;
-              default = self.packages.${pkgs.system}.claude-desktop;
+              default = b.claudeDesktop;
               defaultText = lib.literalExpression "claude-cowork-nix.packages.\${system}.claude-desktop";
               description = "The Claude Desktop package to use.";
             };
@@ -441,6 +505,23 @@
               type = lib.types.bool;
               default = true;
               description = "Create desktop entry for Claude Desktop.";
+            };
+
+            claudeCodePackage = lib.mkOption {
+              type = lib.types.nullOr lib.types.package;
+              default = null;
+              example = lib.literalExpression "pkgs.claude-code";
+              description = ''
+                Claude Code package whose `/bin/claude` will be wired as
+                `CLAUDE_CODE_LOCAL_BINARY`, enabling the Code section's LOCAL
+                sub-mode on Linux by short-circuiting the CCD daemon's
+                `getHostPlatform` throw. When null (default), LOCAL mode
+                remains unavailable unless the env var is set externally.
+
+                Typical values:
+                  pkgs.claude-code                                    # nixpkgs
+                  inputs.claude-code.packages.''${system}.default       # github:sadjow/claude-code-nix
+              '';
             };
           };
 

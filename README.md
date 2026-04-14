@@ -48,12 +48,17 @@ nix profile install github:Reginleif88/claude-cowork-nix
     nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
       modules = [
         claude-cowork-nix.nixosModules.default
-        {
+        ({ pkgs, ... }: {
           programs.claude-desktop = {
             enable = true;
             fhs = true;   # Use FHS wrapper (default: true)
+
+            # OPTIONAL — enables Code section's LOCAL sub-mode. Wires
+            # CLAUDE_CODE_LOCAL_BINARY so CCD uses this binary instead of
+            # trying to download one (which throws on Linux).
+            # claudeCodePackage = pkgs.claude-code;
           };
-        }
+        })
       ];
     };
   };
@@ -63,15 +68,100 @@ nix profile install github:Reginleif88/claude-cowork-nix
 ### Home Manager Module
 
 ```nix
-{
+{ pkgs, ... }: {
   imports = [ claude-cowork-nix.homeManagerModules.default ];
   programs.claude-desktop = {
     enable = true;
     fhs = true;               # FHS wrapper (default: true)
     createDesktopEntry = true; # XDG desktop entry (default: true)
+
+    # OPTIONAL — enables Code section's LOCAL sub-mode
+    # claudeCodePackage = pkgs.claude-code;
   };
 }
 ```
+
+## Enabling the Code section's LOCAL mode
+
+The in-app "Code" section has four sub-modes (LOCAL, SSH, Cloud Environment, Remote Control). SSH / Cloud / Remote Control work out-of-the-box because they bypass the local CCD daemon. **LOCAL requires opt-in** on Linux because Anthropic's CCD daemon throws `Unsupported platform: linux-x64` when trying to download its own claude-code binary.
+
+### How it works
+
+Anthropic's CCD daemon has an undocumented escape hatch: if `CLAUDE_CODE_LOCAL_BINARY` is set to a valid executable path, *every* CCD entry point (`getStatus`, `prepare`, `getBinaryPathIfReady`, `prepareForVM`) short-circuits before the `getHostPlatform` throw. The `claudeCodePackage` option wires this env var into the Electron wrapper at build time.
+
+Patch 12 additionally neutralizes an Anthropic GrowthBook feature flag (`3885610113`) that would otherwise append `[1m]` to Opus/Sonnet model IDs, causing `model_configs/claude-opus-4-6[1m]` 404s that disable the send button. Patch 12 applies unconditionally — you get the fix whether or not you opt into LOCAL mode.
+
+### Three ways to provide a claude-code binary
+
+**Option A — from nixpkgs** (stable, currently v2.1.92):
+
+```nix
+programs.claude-desktop = {
+  enable = true;
+  claudeCodePackage = pkgs.claude-code;
+};
+```
+
+**Option B — from a community flake** (e.g. [claude-code-nix](https://github.com/sadjow/claude-code-nix), tracks upstream closely):
+
+```nix
+# In your outer flake inputs:
+inputs.claude-code.url = "github:sadjow/claude-code-nix";
+inputs.claude-code.inputs.nixpkgs.follows = "nixpkgs";
+
+# In your home.nix / config:
+{ pkgs, inputs, ... }:
+let system = pkgs.stdenv.hostPlatform.system; in {
+  programs.claude-desktop = {
+    enable = true;
+    claudeCodePackage = inputs.claude-code.packages.${system}.default;
+  };
+}
+```
+
+If you already have `inputs.claude-code.packages.${system}.default` in `home.packages`, reuse that same reference — Nix deduplicates, so there's only one claude-code derivation in the store.
+
+**Option C — external env var** (for custom setups, e.g. auth wrappers):
+
+Leave `claudeCodePackage` unset and export `CLAUDE_CODE_LOCAL_BINARY` in your session env (not just your shell rc — the desktop entry won't source that). For example, in `~/.profile`:
+
+```bash
+export CLAUDE_CODE_LOCAL_BINARY="$HOME/.local/bin/claude-wrapper.sh"
+```
+
+The wrapper option uses `makeWrapper --set-default`, so any externally-set `CLAUDE_CODE_LOCAL_BINARY` wins over the module's baked-in path.
+
+### Why installing `claude-code` via `home.packages` isn't enough
+
+Putting claude-code in `home.packages` only adds `claude` to your shell's PATH. The CCD daemon inside the Electron process doesn't call `which claude` — it reads one specific env var:
+
+```js
+// From Claude Desktop's extracted index.js:
+const r = process.env.CLAUDE_CODE_LOCAL_BINARY;
+r && (this.localBinaryInitPromise = this.initLocalBinary(r))
+```
+
+No PATH fallback exists. `claudeCodePackage` bridges the gap: it references the same store path your shell already has, and bakes the `export CLAUDE_CODE_LOCAL_BINARY=…` line into the claude-desktop launcher script.
+
+### Verifying it works
+
+After rebuilding home-manager / the NixOS config:
+
+```bash
+# Confirm the wrapper has the env var
+grep CLAUDE_CODE_LOCAL_BINARY "$(readlink -f $(which claude-desktop))"
+# Expected: export CLAUDE_CODE_LOCAL_BINARY=${CLAUDE_CODE_LOCAL_BINARY-'/nix/store/.../claude-code-.../bin/claude'}
+
+# Launch and check logs for the LOCAL OVERRIDE message
+claude-desktop 2>&1 | grep -i "LOCAL OVERRIDE\|CCD"
+# Expected: [CCD] LOCAL OVERRIDE: Using local binary at /nix/store/.../bin/claude
+```
+
+Then open **Code → LOCAL** in the app, pick a working directory, and send a message. The send button should activate and Claude should stream a response.
+
+### Auth caveat
+
+The Electron-spawned claude-code inherits only the desktop app's env — not your interactive shell's. If you rely on a shell-level auth toggle (e.g. a `claude-provider --env` wrapper that switches between Anthropic and a third-party provider), LOCAL mode will silently fall back to whatever auth is stored in `~/.claude/` (typically your Claude Desktop sign-in). For provider toggling, point `claudeCodePackage` at a thin wrapper derivation that sources your provider env before `exec`-ing the real binary, or use Cowork chats which inherit the desktop app's auth.
 
 ## Package Variants
 
@@ -95,18 +185,20 @@ The default package wraps Claude in a `buildFHSEnv` environment with `/usr/bin/b
 - **Full chat** functionality
 - **Cowork** sessions with Claude Code — multi-turn, file ops, directory picker, transcript persistence (see [COWORK_PROGRESS.md](./COWORK_PROGRESS.md))
 
-## Partially Working — the "Code" section
+## The "Code" section
 
 The Claude Code section in the left sidebar has four sub-modes. Status on Linux:
 
-| Mode | Status | Why |
-|------|--------|-----|
-| **LOCAL** (spawn Claude Code on this machine) | ❌ Broken | Goes through Anthropic's newer "CCD" daemon which assumes macOS/Windows-shaped platform data. The Linux main process answers `getHostPlatform`, but the web UI (loaded from claude.ai, not our asar) then crashes on downstream IPC fields that are undefined on Linux, and Anthropic's `model_configs/[1m]` server endpoint 404s — together these block the send button. Not patchable from the Electron side. |
-| **SSH** (run Claude Code on a remote host via SSH) | ✅ Works | Doesn't touch the local CCD path; the web UI talks directly to the remote. |
+| Mode | Status | Notes |
+|------|--------|-------|
+| **LOCAL** (spawn Claude Code on this machine) | ✅ Works (opt-in) | Set `programs.claude-desktop.claudeCodePackage = pkgs.claude-code;` (or point at any compatible claude-code derivation). This wires `CLAUDE_CODE_LOCAL_BINARY`, which the CCD daemon detects and uses to short-circuit the `getHostPlatform` throw. Patch 12 additionally neutralizes a GrowthBook feature flag (`3885610113`) that would otherwise 404 model config requests and disable the send button. |
+| **SSH** (run Claude Code on a remote host via SSH) | ✅ Works | Bypasses local CCD; the web UI talks directly to the remote. |
 | **Cloud Environment** (Anthropic-managed) | ✅ Works | Same as SSH — bypasses local platform gates. |
 | **Remote Control** | ✅ Works | Same as SSH. |
 
-**For local Claude Code work, use a Cowork chat instead of the LOCAL mode.** Cowork provides the same agent capabilities (spawn, tools, streaming, multi-turn, file operations) through Anthropic's older local-agent IPC path that still works on Linux. Patch 10 was briefly attempted to unblock LOCAL mode and was reverted after confirming the remaining failures live outside our patchable surface; see [COWORK_PROGRESS.md](./COWORK_PROGRESS.md) for the investigation notes.
+**Without `claudeCodePackage` set**, LOCAL mode remains unavailable (CCD falls back to its built-in download path which throws on Linux), but SSH / Cloud / Remote Control still work. Cowork chats remain a fully-featured alternative: same agent capabilities through the older local-agent IPC path. See [COWORK_PROGRESS.md](./COWORK_PROGRESS.md) for the full investigation and design notes.
+
+**Auth caveat**: the Electron-spawned `claude-code` inherits only the desktop app's env, not your shell's. If you rely on a shell-level auth wrapper (e.g. `claude-provider --env` toggling between Anthropic and a provider), LOCAL mode will silently use whatever auth is stored in `~/.claude/` (typically your Claude Desktop sign-in). For provider toggling, point `claudeCodePackage` at a thin wrapper script that sources your provider env before `exec`-ing the real binary, or leave it unset and use Cowork chats.
 
 ## Architecture
 
@@ -117,7 +209,7 @@ macOS DMG (fetchurl)
        |
   asar_tool.py extract -> raw JS
        |
-  11 patches:
+  12 patches:
     00: Native module stub (@ant/claude-native + AuthRequest)
     01: Cowork module loader (claude-cowork-linux)
     02: Platform flag (route Linux through TypeScript VM path)
@@ -129,6 +221,7 @@ macOS DMG (fetchurl)
     08: Tray icon (theme-aware PNGs for Linux)
     09: DBus tray cleanup delay (stability fix)
     11: shellPathWorker resolution (use process.argv[1], not resourcesPath)
+    12: [1m] model-suffix neutralization (unblocks Code/LOCAL send button)
        |
   asar_tool.py pack -> patched app.asar
        |

@@ -6,7 +6,7 @@ This document describes the patching approach used in `claude-cowork-nix` to mak
 
 A **hybrid** strategy combining inline `perl -pe` regex substitutions with a dynamic Node.js script:
 
-- **7 regex patches** (02, 03, 04, 06a, 06b, 08a, 08b, 09) use `perl -pe` with `\w+` wildcards for minified identifiers, applied directly in the Nix build phase
+- **9 regex patches** (02, 03, 04, 06a, 06b, 08a, 08b, 09, 11, 12) use `perl -pe` with `\w+` wildcards for minified identifiers, applied directly in the Nix build phase
 - **1 dynamic patch** (05) uses a Node.js script that discovers the VM start function by its `[VM:start]` log string, then injects the Linux session block
 - **2 file-based patches** (00, 01, 07) append or copy standalone JavaScript files
 - Each regex patch is verified with a `grep -qP` post-check that fails the build on mismatch
@@ -49,7 +49,36 @@ grep -oP '\w+\?\w+=\w+\.nativeTheme\.shouldUseDarkColors\?"Tray-Win32-Dark\.ico"
 
 # Patch 11: shellPathWorker base
 grep -oP 'function \w+\(\)\{return \w+\.join\(process\.resourcesPath,"app\.asar",".vite","build","shell-path-worker","shellPathWorker\.js"\)\}' $INDEX
+
+# Patch 12: [1m] model-suffix feature flag function
+grep -oP 'function \w+\(t\)\{return/\[1m\]/i\.test\(t\)\|\|!\w+\("3885610113"\)\|\|!/sonnet-4-6\|opus-4-6/i\.test\(t\)\?t:`\$\{t\}\[1m\]`\}' $INDEX
 ```
+
+## Patch 12: The `[1m]` suffix and Code/LOCAL mode
+
+Independent of patches 02–09 (which route Linux through Cowork's VM path), patch 12 enables the Code section's **LOCAL** sub-mode. LOCAL was previously documented as broken; the actual blocker is a client-side GrowthBook feature flag (`3885610113`) that appends `[1m]` to Opus-4.6 / Sonnet-4.6 model ids at session-start time. Anthropic's `/api/.../model_configs/<id>[1m]` endpoint 404s, which cascades into an `undefined.includes()` crash in the renderer and disables the send button.
+
+The suffix function has a very specific signature — three `||`-separated conditions with a literal GrowthBook flag id — that the patch-12 regex matches precisely:
+
+```javascript
+// Before patch:
+function zxt(t) {
+  return /\[1m\]/i.test(t) || !rn("3885610113") || !/sonnet-4-6|opus-4-6/i.test(t)
+    ? t
+    : `${t}[1m]`;
+}
+
+// After patch:
+function zxt(t) { return t }
+```
+
+Both call sites (`model: zxt(r.model || "default")` at session start, and `const i = zxt(r)` in `setModel`) are preserved; only the function body is neutralized.
+
+## CCD's `CLAUDE_CODE_LOCAL_BINARY` escape hatch
+
+Patch 12 alone isn't sufficient for LOCAL mode — the CCD daemon also throws `Unsupported platform: linux-x64` from `getHostPlatform` when preparing to download its own binary. Anthropic provides an undocumented escape hatch: setting `process.env.CLAUDE_CODE_LOCAL_BINARY` to a valid executable path causes the CCD constructor to short-circuit *every* entry point (`getStatus`, `prepare`, `getBinaryPathIfReady`, `prepareForVM`) **before** `getHostPlatform` is reached.
+
+The module options `programs.claude-desktop.claudeCodePackage` (NixOS + Home Manager) wire this via `makeWrapper --set-default`, so the user's external `CLAUDE_CODE_LOCAL_BINARY` (if any) still wins. No ASAR patch is required for the escape hatch — just the env var.
 
 ## Wrapped-Electron Path Resolution Gotcha
 

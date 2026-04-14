@@ -53,6 +53,7 @@ See `docs/patching-architecture.md` for the full technical analysis.
 | 08 | `perl -pe` regex | Use theme-aware PNGs for tray icon |
 | 09 | `perl -pe` regex | DBus tray cleanup delay for stability |
 | 11 | `perl -pe` regex | Resolve `shellPathWorker.js` from Claude's asar (not Electron runtime's) |
+| 12 | `perl -pe` regex | Neutralize `[1m]` model-suffix feature flag (GrowthBook `3885610113`) — unblocks Code/LOCAL send button |
 
 ## Electron Gotchas
 

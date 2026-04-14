@@ -17,6 +17,7 @@ Cowork is running on Linux via a fully declarative Nix flake. Claude Code spawns
 9. **Persistent auth tokens**: `--password-store=gnome-libsecret` (KDE Wallet, GNOME Keyring)
 10. **NixOS + Home Manager modules**: `programs.claude-desktop.enable`
 11. **Shell PATH augmentation**: shellPathWorker resolves login-shell env vars into the app process (`[CCD] Resolved N CC env vars from login shell`)
+12. **Code section → LOCAL mode** (opt-in via `programs.claude-desktop.claudeCodePackage`): uses CCD's official `CLAUDE_CODE_LOCAL_BINARY` escape hatch to short-circuit the `getHostPlatform` throw, combined with patch 12 to neutralize the `[1m]` GrowthBook feature flag that 404s model config requests. Send button functional; sessions spawn directly on the host without VM.
 
 ### Known Limitations
 
@@ -28,7 +29,7 @@ Cowork is running on Linux via a fully declarative Nix flake. Claude Code spawns
 - **Find-in-page preload origin error**: Cosmetic — `DesktopIntl` origin allowlist doesn't recognize `file:///nix/store/` paths. Falls back to default English locale; in-app Ctrl+F search may be affected.
 - **`model_configs/[1m]` 404**: 1M-context Opus `model_config` endpoint returns 404. Server-side (likely URL-encoding of the `[1m]` suffix or org entitlement), not patchable here.
 - **`BuddyBleTransport.reportState`**: Bluetooth IPC handler not registered on Linux. Fires once at startup; harmless.
-- **In-app Code section → LOCAL mode**: not functional on Linux. LOCAL routes through Anthropic's newer "CCD" daemon, whose `getHostPlatform()` throws `Unsupported platform: linux-x64` (hence the polling-loop log noise). Patch 10 unblocked that throw but exposed downstream web-UI crashes (`TypeError: Cannot read properties of undefined (reading 'includes')`) and the `/api/.../model_configs/claude-opus-4-6[1m]` 404 that disables the send button — both live outside our asar-patchable surface (remote web code + server-side API). Patch 10 was reverted after confirming. **SSH / Cloud Environment / Remote-control modes of the Code section do work** because they don't go through CCD. For local Claude Code execution, use a Cowork chat (same capabilities, older IPC path that still works on Linux). If only the polling-loop log noise matters, revisit as a "return `{status: unsupported}`" stub on the IPC handler.
+- **In-app Code section → LOCAL mode** requires opt-in: set `programs.claude-desktop.claudeCodePackage = <claude-code package>` (e.g. `pkgs.claude-code` or `inputs.claude-code.packages.${system}.default`). Without this, the Electron process has no `CLAUDE_CODE_LOCAL_BINARY` set, so CCD falls back to its built-in `getHostPlatform` path which still throws on Linux (producing polling-loop log noise but not crashing the app). The earlier `undefined.includes()` and `model_configs/[1m]` 404 blockers are resolved by patch 12 regardless. **SSH / Cloud Environment / Remote-control modes** continue to work (bypass CCD entirely).
 
 ## Architecture
 
@@ -49,6 +50,7 @@ All patches use version-resilient `\w+` regex wildcards for minified identifiers
 | 08 | `perl -pe` regex | Use theme-aware PNGs for tray icon |
 | 09 | `perl -pe` regex | DBus tray cleanup delay for stability |
 | 11 | `perl -pe` regex | Resolve `shellPathWorker.js` from Claude's asar (not Electron runtime's) |
+| 12 | `perl -pe` regex | Neutralize `[1m]` model-suffix (GrowthBook flag `3885610113`); unblocks Code/LOCAL send button |
 
 ### Session Flow
 
@@ -94,7 +96,7 @@ User sends message in Cowork UI
 3. Investigate bubblewrap sandboxing (requires Nix store bind-mounts)
 4. Stub `ClaudeVM.getDownloadStatus` to silence the once-per-launch cosmetic error
 5. Patch `DesktopIntl` origin allowlist to accept `file:///nix/store/` paths (would fix find-in-page preload + locale init)
-6. Re-attempt the in-app ClaudeCode patch as a `{status: "unsupported"}` stub on the IPC handler, not a platform-branch spoof — silences the polling loop without engaging the broken UI code path
+6. Silence CCD polling-loop log noise when `claudeCodePackage` is unset — cheap stub returning `{status: "unsupported"}` from the IPC handler
 
 ---
 
