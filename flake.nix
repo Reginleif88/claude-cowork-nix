@@ -161,9 +161,11 @@
               echo "[patch:02] Done"
 
               # --- Patch 03: Availability check (regex) ---
-              # Prepends Linux "supported" return before the platform check
+              # Prepends Linux "supported" return before the platform check.
+              # Function name may contain `$` in minified code (e.g. v1.2278.0's
+              # `J$n`), so match with [\w\$]+ rather than \w+.
               echo "[patch:03] Patching availability check..."
-              perl -i -pe 's{(function )(\w+)(\(\)\{)(const t=process\.platform;if\(t!=="darwin"&&t!=="win32"\)return\{status:"unsupported")}{$1$2$3if(process.platform==="linux"\&\&global.__linuxCowork)return\{status:"supported"\};$4}g' "$INDEX"
+              perl -i -pe 's{(function )([\w\$]+)(\(\)\{)(const t=process\.platform;if\(t!=="darwin"&&t!=="win32"\)return\{status:"unsupported")}{$1$2$3if(process.platform==="linux"\&\&global.__linuxCowork)return\{status:"supported"\};$4}g' "$INDEX"
               grep -qP 'if\(process\.platform==="linux"&&global\.__linuxCowork\)return\{status:"supported"\}' "$INDEX" \
                 || { echo "ERROR: patch 03 (availability check) failed to apply"; exit 1; }
               echo "[patch:03] Done"
