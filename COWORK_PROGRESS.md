@@ -1,6 +1,6 @@
 # Cowork on Linux - Progress Report
 
-## Current Status: v1.2278.0 — Cowork + Code/LOCAL Functional
+## Current Status: v1.3109.0 — Cowork + Code/LOCAL Functional
 
 Cowork is running on Linux via a fully declarative Nix flake. Claude Code spawns inside Cowork sessions, processes messages via the SDK wire protocol, streams responses, and persists transcripts across app restarts.
 
@@ -24,7 +24,7 @@ Cowork is running on Linux via a fully declarative Nix flake. Claude Code spawns
 - **No bubblewrap sandboxing**: Claude Code runs directly on the host, not inside a sandbox. NixOS paths are incompatible with simple bwrap bind-mounts.
 - **Executable file preview blocked**: `.sh`, `.exe` etc. can't be opened in UI preview — upstream security behavior, not Linux-specific.
 - **Missing native stub functions**: `getAppInfoForFile` and `getWindowsElevationType` cause harmless log errors.
-- **Missing `cowork-plugin-shim.sh`**: Plugin permission bridge not implemented. Warns in logs but doesn't block functionality.
+- **Plugin permission shim**: `cowork-plugin-shim.sh` is now provided in the asar resources. The shim permission bridge starts and mounts `.cowork-lib`, `.cowork-perm-req`, `.cowork-perm-resp` into sessions.
 - **Cosmetic VM download error**: `Cannot read properties of undefined (reading 'x64')` — harmless, download is skipped by patch 04. Status query (`ClaudeVM.getDownloadStatus`) is not stubbed and produces one error per launch.
 - **Find-in-page preload origin error**: Cosmetic — `DesktopIntl` origin allowlist doesn't recognize `file:///nix/store/` paths. Falls back to default English locale; in-app Ctrl+F search may be affected.
 - **`BuddyBleTransport.reportState`**: Bluetooth IPC handler not registered on Linux. Fires once at startup; harmless.
@@ -32,7 +32,7 @@ Cowork is running on Linux via a fully declarative Nix flake. Claude Code spawns
 
 ## Architecture
 
-### Patch Chain (v1.2278.0)
+### Patch Chain (v1.3109.0)
 
 All patches use version-resilient `\w+` (or `[\w\$]+` where minified names contain `$`) regex wildcards for minified identifiers. Function names are discovered at build time, not hardcoded.
 
@@ -91,13 +91,12 @@ User sends message in Cowork UI
 ## Next Steps
 
 1. Add missing native stub functions (`getAppInfoForFile`, `getWindowsElevationType`)
-2. Implement `cowork-plugin-shim.sh` for plugin permissions
-3. Investigate bubblewrap sandboxing (requires Nix store bind-mounts)
-4. Stub `ClaudeVM.getDownloadStatus` to silence the once-per-launch cosmetic error
-5. Patch `DesktopIntl` origin allowlist to accept `file:///nix/store/` paths (would fix find-in-page preload + locale init)
-6. Silence CCD polling-loop log noise when `claudeCodePackage` is unset — cheap stub returning `{status: "unsupported"}` from the IPC handler
+2. Investigate bubblewrap sandboxing (requires Nix store bind-mounts)
+3. Stub `ClaudeVM.getDownloadStatus` to silence the once-per-launch cosmetic error
+4. Patch `DesktopIntl` origin allowlist to accept `file:///nix/store/` paths (would fix find-in-page preload + locale init)
+5. Silence CCD polling-loop log noise when `claudeCodePackage` is unset — cheap stub returning `{status: "unsupported"}` from the IPC handler
 
 ---
 
-**Last Updated**: 2026-04-14
-**Claude Desktop Version**: 1.2278.0
+**Last Updated**: 2026-04-17
+**Claude Desktop Version**: 1.3109.0

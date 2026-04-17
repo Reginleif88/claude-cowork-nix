@@ -4,7 +4,7 @@ Enabling macOS-only Claude Desktop features on Linux via runtime patching.
 
 ## Architecture
 
-- **Source**: macOS DMG fetched via `fetchurl` (currently v1.2278.0 — tracked by github-actions auto-update)
+- **Source**: macOS DMG fetched via `fetchurl` (currently v1.3109.0 — tracked by github-actions auto-update)
 - **Extraction**: `7zz` (native LZFSE support) + `asar_tool.py`
 - **Runtime**: `electron_41` from nixpkgs
 - **Packaging**: Nix flake with `makeWrapper` + `buildFHSEnv`

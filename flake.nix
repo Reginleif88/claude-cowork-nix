@@ -127,6 +127,12 @@
                 echo "  WARNING: electron.icns not found, skipping app icon extraction"
               fi
 
+              # Copy plugin permission shim into resources/
+              echo "  Installing plugin permission shim..."
+              cp ${./scripts/cowork-plugin-shim.sh} extracted/resources/cowork-plugin-shim.sh
+              chmod +x extracted/resources/cowork-plugin-shim.sh
+              echo "  Done"
+
               # Apply patches (version-resilient regex + dynamic discovery)
               echo "[4/6] Applying patches..."
 
@@ -164,17 +170,19 @@
               # Prepends Linux "supported" return before the platform check.
               # Function name may contain `$` in minified code (e.g. v1.2278.0's
               # `J$n`), so match with [\w\$]+ rather than \w+.
+              # Local variable name varies across versions (t, e, ...) — use \w+.
               echo "[patch:03] Patching availability check..."
-              perl -i -pe 's{(function )([\w\$]+)(\(\)\{)(const t=process\.platform;if\(t!=="darwin"&&t!=="win32"\)return\{status:"unsupported")}{$1$2$3if(process.platform==="linux"\&\&global.__linuxCowork)return\{status:"supported"\};$4}g' "$INDEX"
+              perl -i -pe 's{(function )([\w\$]+)(\(\)\{)(const \w+=process\.platform;if\(\w+!=="darwin"&&\w+!=="win32"\)return\{status:"unsupported")}{$1$2$3if(process.platform==="linux"\&\&global.__linuxCowork)return\{status:"supported"\};$4}g' "$INDEX"
               grep -qP 'if\(process\.platform==="linux"&&global\.__linuxCowork\)return\{status:"supported"\}' "$INDEX" \
                 || { echo "ERROR: patch 03 (availability check) failed to apply"; exit 1; }
               echo "[patch:03] Done"
 
               # --- Patch 04: Skip download (regex) ---
               # Skips macOS VM bundle download on Linux
+              # Parameter names vary across versions (t,e / e,A / ...) — use \w+.
               echo "[patch:04] Patching download skip..."
-              perl -i -pe 's{(async function \w+\(t,e\)\{)(.{0,200}?\[downloadVM\])}{$1if(process.platform==="linux"\&\&global.__linuxCowork){console.log("[Cowork Linux] Skipping bundle download");return!1}$2}g' "$INDEX"
-              grep -qP 'async function \w+\(t,e\)\{if\(process\.platform==="linux"' "$INDEX" \
+              perl -i -pe 's{(async function \w+\(\w+,\w+\)\{)(.{0,200}?\[downloadVM\])}{$1if(process.platform==="linux"\&\&global.__linuxCowork){console.log("[Cowork Linux] Skipping bundle download");return!1}$2}g' "$INDEX"
+              grep -qP 'async function \w+\(\w+,\w+\)\{if\(process\.platform==="linux"' "$INDEX" \
                 || { echo "ERROR: patch 04 (skip download) failed to apply"; exit 1; }
               echo "[patch:04] Done"
 
@@ -243,12 +251,14 @@
               # model ids, which 404s on /api/.../model_configs/claude-opus-4-6[1m] and
               # cascades into undefined.includes() in the renderer, disabling the Code
               # section's LOCAL-mode send button. Replace the suffix function body with
-              # `return t` so model ids are passed through unchanged.
+              # a pass-through so model ids are returned unchanged.
+              # Parameter name varies across versions (t, e, ...) — use \w+ and
+              # match the body loosely between the [1m] test and the template literal.
               echo "[patch:12] Neutralizing [1m] model-suffix feature flag..."
-              grep -qP 'function \w+\(t\)\{return/\\\[1m\\\]/i\.test' "$INDEX" \
+              grep -qP 'function \w+\(\w+\)\{return/\\\[1m\\\]/i\.test' "$INDEX" \
                 || { echo "ERROR: patch 12 target function not found (pre-check)"; exit 1; }
-              perl -i -pe 's{function (\w+)\(t\)\{return/\\\[1m\\\]/i\.test\(t\)\|\|!\w+\("3885610113"\)\|\|!/sonnet-4-6\|opus-4-6/i\.test\(t\)\?t:`\$\{t\}\[1m\]`\}}{function $1(t){return t}}g' "$INDEX"
-              if grep -qP 'function \w+\(t\)\{return/\\\[1m\\\]/i\.test' "$INDEX"; then
+              perl -i -pe 's{function (\w+)\((\w+)\)\{return/\\\[1m\\\]/i\.test\(\2\)\|\|!\w+\("3885610113"\)\|\|.+?\?\2:`\$\{\2\}\[1m\]`\}}{function $1($2){return $2}}g' "$INDEX"
+              if grep -qP 'function \w+\(\w+\)\{return/\\\[1m\\\]/i\.test' "$INDEX"; then
                 echo "ERROR: patch 12 ([1m] suffix) did not neutralize target"
                 exit 1
               fi

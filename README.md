@@ -3,7 +3,7 @@
 [![Nix Flake](https://img.shields.io/badge/Nix-Flake-5277C3?logo=nixos&logoColor=white)](https://github.com/Reginleif88/claude-cowork-nix)
 [![Platform](https://img.shields.io/badge/Platform-Linux-blue?logo=linux&logoColor=white)](https://github.com/Reginleif88/claude-cowork-nix)
 [![License](https://img.shields.io/badge/License-Apache--2.0%20OR%20MIT-blue)](./LICENSE-APACHE)
-[![Claude Desktop](https://img.shields.io/badge/Claude_Desktop-v1.2278.0-d97757)](https://claude.ai)
+[![Claude Desktop](https://img.shields.io/badge/Claude_Desktop-v1.3109.0-d97757)](https://claude.ai)
 [![Cowork](https://img.shields.io/badge/Cowork-Enabled-green)](./COWORK_PROGRESS.md)
 
 Fully declarative NixOS package for Claude Desktop on Linux with Cowork support. Extracts from the macOS DMG, patches for Linux compatibility, and wraps with Electron 41.
@@ -241,6 +241,7 @@ Claude Desktop has two VM paths: macOS via `@ant/claude-swift` (Swift native mod
 ├── scripts/
 │   ├── branding-fix.js               # Platform branding patch
 │   ├── cowork-init.js                # Cowork initialization
+│   ├── cowork-plugin-shim.sh         # Plugin permission bridge (filesystem IPC)
 │   └── patch-vm-start.js             # VM start intercept (spawn, writeStdin, mounts)
 ├── tools/
 │   ├── asar_tool.py                  # ASAR archive extract/pack
